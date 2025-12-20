@@ -5,8 +5,8 @@ import { xhrBenchmark } from "./impl/xhr";
 import type { Benchmark } from "./types";
 
 export const benchmarks: Benchmark[] = [
-	fetchBenchmark,
-	axiosBenchmark,
-	xhrBenchmark,
-	fileSystemBenchmark,
+  fetchBenchmark,
+  axiosBenchmark,
+  xhrBenchmark,
+  fileSystemBenchmark,
 ];
