@@ -1,12 +1,12 @@
-import { Benchmark } from './types';
-import { fetchBenchmark } from './impl/fetch';
-import { axiosBenchmark } from './impl/axios';
-import { xhrBenchmark } from './impl/xhr';
-import { fileSystemBenchmark } from './impl/filesystem';
+import { axiosBenchmark } from "./impl/axios";
+import { fetchBenchmark } from "./impl/fetch";
+import { fileSystemBenchmark } from "./impl/filesystem";
+import { xhrBenchmark } from "./impl/xhr";
+import type { Benchmark } from "./types";
 
 export const benchmarks: Benchmark[] = [
-    fetchBenchmark,
-    axiosBenchmark,
-    xhrBenchmark,
-    fileSystemBenchmark,
+	fetchBenchmark,
+	axiosBenchmark,
+	xhrBenchmark,
+	fileSystemBenchmark,
 ];
