@@ -24,11 +24,7 @@ A React Native / Expo application designed to benchmark different HTTP client im
 ├── benchmarks/          # Core benchmarking logic
 │   ├── types.ts         # Interfaces (Benchmark, Result)
 │   ├── utils.ts         # Helpers (formatBytes, throughput calc)
-│   ├── index.ts         # Benchmark registry (Export array)
-│   └── impl/            # Implementation files
-│       ├── fetch.ts
-│       ├── expoFetch.ts
-│       └── ...
+│   └── index.ts         # Benchmark registry and impl (Export array)
 ├── components/          # Reusable UI components
 │   └── BenchmarkCard.tsx
 ├── biome.json           # Biome configuration

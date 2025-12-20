@@ -7,7 +7,8 @@ import type { BenchmarkResult, BenchmarkStatus } from "../benchmarks/types";
 import { BenchmarkCard } from "../components/BenchmarkCard";
 
 export default function HomeScreen() {
-  const [url, SHUrl] = useState("https://jsonplaceholder.typicode.com/photos");
+  // https://jsonplaceholder.typicode.com/photos
+  const [url, SHUrl] = useState("http://localhost:8000/employees_50MB.json");
   const [statuses, setStatuses] = useState<Record<string, BenchmarkStatus>>({});
   const [results, setResults] = useState<Record<string, BenchmarkResult>>({});
 
@@ -47,44 +48,38 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <Appbar.Header elevated>
-        <Appbar.Content title="Fetch Benchmark" />
-      </Appbar.Header>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={styles.controls}>
+        <TextInput
+          label="Target URL"
+          value={url}
+          onChangeText={SHUrl}
+          mode="outlined"
+          style={styles.input}
+          autoCapitalize="none"
+          keyboardType="url"
+        />
+        <Button mode="contained-tonal" onPress={runAll} icon="play-box-multiple">
+          Run All
+        </Button>
+      </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.controls}>
-          <TextInput
-            label="Target URL"
-            value={url}
-            onChangeText={SHUrl}
-            mode="outlined"
-            style={styles.input}
-            autoCapitalize="none"
-            keyboardType="url"
-          />
-          <Button mode="contained-tonal" onPress={runAll} icon="play-box-multiple">
-            Run All
-          </Button>
+      {benchmarks.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text variant="bodyLarge">No benchmarks registered yet.</Text>
         </View>
-
-        {benchmarks.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text variant="bodyLarge">No benchmarks registered yet.</Text>
-          </View>
-        ) : (
-          benchmarks.map((b) => (
-            <BenchmarkCard
-              key={b.id}
-              benchmark={b}
-              status={statuses[b.id] || "idle"}
-              result={results[b.id]}
-              onRun={() => runBenchmark(b.id)}
-            />
-          ))
-        )}
-      </ScrollView>
-    </SafeAreaView>
+      ) : (
+        benchmarks.map((b) => (
+          <BenchmarkCard
+            key={b.id}
+            benchmark={b}
+            status={statuses[b.id] || "idle"}
+            result={results[b.id]}
+            onRun={() => runBenchmark(b.id)}
+          />
+        ))
+      )}
+    </ScrollView>
   );
 }
 

@@ -14,3 +14,7 @@ export interface Benchmark {
   description: string;
   run: (url: string) => Promise<BenchmarkResult>;
 }
+
+export interface BasicBenchmark extends Omit<Benchmark, "run"> {
+  run: (url: string) => Promise<Response>;
+}

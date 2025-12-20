@@ -6,7 +6,8 @@ export default function RootLayout() {
     <PaperProvider>
       <Stack
         screenOptions={{
-          headerShown: false,
+          headerShown: true,
+          title: "Fetch benchmark",
         }}
       />
     </PaperProvider>
