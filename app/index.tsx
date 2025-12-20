@@ -11,6 +11,15 @@ export default function HomeScreen() {
   const [url, SHUrl] = useState("http://localhost:8000/employees_50MB.json");
   const [statuses, setStatuses] = useState<Record<string, BenchmarkStatus>>({});
   const [results, setResults] = useState<Record<string, BenchmarkResult>>({});
+  const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>(() =>
+    benchmarks.map((b) => b.id),
+  );
+
+  const toggleBenchmark = (id: string) => {
+    setSelectedBenchmarks((prev) =>
+      prev.includes(id) ? prev.filter((bId) => bId !== id) : [...prev, id],
+    );
+  };
 
   const runBenchmark = async (id: string) => {
     const benchmark = benchmarks.find((b) => b.id === id);
@@ -43,7 +52,9 @@ export default function HomeScreen() {
 
   const runAll = async () => {
     for (const b of benchmarks) {
-      await runBenchmark(b.id);
+      if (selectedBenchmarks.includes(b.id)) {
+        await runBenchmark(b.id);
+      }
     }
   };
 
@@ -60,8 +71,24 @@ export default function HomeScreen() {
           autoCapitalize="none"
           keyboardType="url"
         />
-        <Button mode="contained-tonal" onPress={runAll} icon="play-box-multiple">
-          Run All
+        <View style={styles.buttonRow}>
+          <Button
+            mode="contained-tonal"
+            onPress={() => setSelectedBenchmarks(benchmarks.map((b) => b.id))}
+            style={styles.flexButton}
+          >
+            Select All
+          </Button>
+          <Button
+            mode="contained-tonal"
+            onPress={() => setSelectedBenchmarks([])}
+            style={styles.flexButton}
+          >
+            Deselect All
+          </Button>
+        </View>
+        <Button mode="contained" onPress={runAll} icon="play-box-multiple">
+          Run Selected
         </Button>
       </View>
 
@@ -77,6 +104,8 @@ export default function HomeScreen() {
             status={statuses[b.id] || "idle"}
             result={results[b.id]}
             onRun={() => runBenchmark(b.id)}
+            isSelected={selectedBenchmarks.includes(b.id)}
+            onToggle={() => toggleBenchmark(b.id)}
           />
         ))
       )}
@@ -103,5 +132,12 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: "center",
     marginTop: 40,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  flexButton: {
+    flex: 1,
   },
 });

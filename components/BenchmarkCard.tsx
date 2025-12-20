@@ -1,5 +1,5 @@
 import { StyleSheet, View } from "react-native";
-import { ActivityIndicator, Button, Card, Text, useTheme } from "react-native-paper";
+import { ActivityIndicator, Button, Card, Checkbox, Text, useTheme } from "react-native-paper";
 import type { Benchmark, BenchmarkResult, BenchmarkStatus } from "../benchmarks/types";
 import { formatBytes } from "../benchmarks/utils";
 
@@ -8,20 +8,37 @@ interface Props {
   status: BenchmarkStatus;
   result?: BenchmarkResult;
   onRun: () => void;
+  isSelected: boolean;
+  onToggle: () => void;
 }
 
-export function BenchmarkCard({ benchmark, status, result, onRun }: Props) {
+export function BenchmarkCard({ benchmark, status, result, onRun, isSelected, onToggle }: Props) {
   const theme = useTheme();
 
   return (
     <Card style={styles.card}>
       <Card.Content>
         <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text variant="titleMedium">{benchmark.name}</Text>
-            <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
-              {benchmark.description}
-            </Text>
+          <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+            <View
+              style={[
+                styles.checkboxWrapper,
+                { marginRight: 8 }, // Added margin here
+                !isSelected && { borderColor: theme.colors.outlineVariant },
+              ]}
+            >
+              <Checkbox
+                status={isSelected ? "checked" : "unchecked"}
+                onPress={onToggle}
+                color={theme.colors.primary}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="titleMedium">{benchmark.name}</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
+                {benchmark.description}
+              </Text>
+            </View>
           </View>
           {status === "running" && <ActivityIndicator animating={true} size="small" />}
         </View>
@@ -88,5 +105,14 @@ const styles = StyleSheet.create({
   },
   metric: {
     alignItems: "center",
+  },
+  checkboxWrapper: {
+    padding: 0,
+    borderWidth: 1,
+    borderRadius: 4,
+    // width: 28, // Adjusted width
+    // height: 28, // Adjusted height
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
