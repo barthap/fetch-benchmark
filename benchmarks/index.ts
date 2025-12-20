@@ -1,4 +1,5 @@
 import { fetch as expoFetch } from "expo/fetch";
+import { fetch as nitroFetch } from "react-native-nitro-fetch";
 
 import type { Benchmark } from "./types";
 import { makeBenchmark } from "./utils";
@@ -106,6 +107,59 @@ export const benchmarks: Benchmark[] = [
     description: "Encode text string to bytes",
     run: async (url: string): Promise<Response> => {
       const response = await expoFetch(url);
+      const text = await response.text();
+      const _bytes = new TextEncoder().encode(text);
+      return response;
+    },
+  }),
+  // nitro-fetch
+  makeBenchmark({
+    id: "nitro-res-json",
+    name: "Nitro res.json()",
+    description: "Parse response as JSON",
+    run: async (url: string): Promise<Response> => {
+      const response = await nitroFetch(url);
+      const _result = await response.json();
+      return response;
+    },
+  }),
+  makeBenchmark({
+    id: "nitro-res-text",
+    name: "Nitro res.text()",
+    description: "Parse response as text",
+    run: async (url: string): Promise<Response> => {
+      const response = await nitroFetch(url);
+      const _result = await response.text();
+      return response;
+    },
+  }),
+  makeBenchmark({
+    id: "nitro-res-text-json-parse",
+    name: "Nitro res.text() and JSON.parse",
+    description: "Parse plain text as JSON",
+    run: async (url: string): Promise<Response> => {
+      const response = await nitroFetch(url);
+      const _result = await response.text();
+      const _json = JSON.parse(_result);
+      return response;
+    },
+  }),
+  makeBenchmark({
+    id: "nitro-res-array-buffer",
+    name: "Nitro res.ArrayBuffer()",
+    description: "Parse response as ArrayBuffer",
+    run: async (url: string): Promise<Response> => {
+      const response = await nitroFetch(url);
+      const _result = await response.arrayBuffer();
+      return response;
+    },
+  }),
+  makeBenchmark({
+    id: "nitro-res-text-encoder",
+    name: "Nitro res.text() and TextEncoder",
+    description: "Encode text string to bytes",
+    run: async (url: string): Promise<Response> => {
+      const response = await nitroFetch(url);
       const text = await response.text();
       const _bytes = new TextEncoder().encode(text);
       return response;

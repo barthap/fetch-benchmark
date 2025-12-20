@@ -63,7 +63,29 @@ A React Native / Expo application designed to benchmark different HTTP client im
 
 - **Formatting**: Run `bun run format` before committing.
 
-### Adding a New Benchmark
+### Adding a new Simple Benchmark
+
+Simple benchmarks are fetch-based benchmarks
+
+1. **Create Implementation**: Add a new item to the array in `benchmarks/index.ts`:
+
+   ```typescript
+    // ...
+    makeBenchmark({
+      id: "res-json",
+      name: "res.json()",
+      description: "Parse response as JSON",
+      run: async (url: string): Promise<Response> => {
+        const response = await fetch(url);
+        const _result = await response.json();
+        return response;
+      },
+    }),
+   ```
+
+### Adding a new Complex Benchmark
+
+Complex benchmarks are non fetch-based benchmarks
 
 1. **Create Implementation**: Add a new file in `benchmarks/impl/` (e.g., `myClient.ts`).
 2. **Implement Interface**: Export a const object adhering to the `Benchmark` interface.
