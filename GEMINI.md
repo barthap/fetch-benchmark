@@ -38,8 +38,14 @@ A React Native / Expo application designed to benchmark different HTTP client im
 - **Start App**: `bun run start` (or `npx expo start`)
 - **Lint & Check**: `bun run check`
 - **Format Code**: `bun run format`
+- **Check Dependencies**: `bunx expo-doctor`
+- **Fix Dependency Versions**: `bun expo install --fix`
 
-## 5. Development Conventions
+## 5. Maintenance
+- **Health Check**: Periodically run `bunx expo-doctor` to ensure the project configuration and dependencies are healthy.
+- **Dependency Sync**: Use `bun expo install --fix` to automatically align installed package versions with the requirements of the current Expo SDK.
+
+## 6. Development Conventions
 
 ### Code Style (Biome)
 - **Imports**: Use `import type` for type-only imports (Enforced by Biome).
