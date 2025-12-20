@@ -27,6 +27,7 @@ export const ResultsChart = ({ benchmarks, results }: ResultsChartProps) => {
       return {
         id,
         name: benchmark?.name || "Unknown",
+        category: benchmark?.category || "Unknown",
         duration: result.durationMs,
       };
     })
@@ -50,7 +51,10 @@ export const ResultsChart = ({ benchmarks, results }: ResultsChartProps) => {
 
             return (
               <View key={result.id} style={styles.barContainer}>
-                <Text style={styles.barLabel}>{result.name}</Text>
+                <View style={styles.barLabel}>
+                  <Text style={{ fontWeight: "bold" }}>{result.category}</Text>
+                  <Text>{result.name}</Text>
+                </View>
                 <View style={styles.barWrapper}>
                   <View
                     style={[

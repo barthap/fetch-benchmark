@@ -12,6 +12,7 @@ export interface Benchmark {
   id: string;
   name: string;
   description: string;
+  category: string;
   run: (url: string) => Promise<BenchmarkResult>;
 }
 

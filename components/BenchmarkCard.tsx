@@ -34,7 +34,7 @@ export function BenchmarkCard({ benchmark, status, result, onRun, isSelected, on
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text variant="titleMedium">{benchmark.name}</Text>
+              <Text variant="titleMedium">{`${benchmark.category}: ${benchmark.name}`}</Text>
               <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
                 {benchmark.description}
               </Text>
