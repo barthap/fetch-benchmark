@@ -1,4 +1,4 @@
-import { BasicBenchmark, Benchmark, BenchmarkResult } from "./types";
+import type { BasicBenchmark, Benchmark, BenchmarkResult } from "./types";
 
 export function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return "0 Bytes";

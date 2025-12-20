@@ -1,15 +1,21 @@
 import { Stack } from "expo-router";
-import { PaperProvider } from "react-native-paper";
+import { Appbar, PaperProvider } from "react-native-paper";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export default function RootLayout() {
   return (
-    <PaperProvider>
-      <Stack
-        screenOptions={{
-          headerShown: true,
-          title: "Fetch benchmark",
-        }}
-      />
-    </PaperProvider>
+    <SafeAreaProvider>
+      <PaperProvider>
+        <Stack
+          screenOptions={{
+            header: (_props) => (
+              <Appbar.Header>
+                <Appbar.Content title="Fetch Benchmark" />
+              </Appbar.Header>
+            ),
+          }}
+        />
+      </PaperProvider>
+    </SafeAreaProvider>
   );
 }

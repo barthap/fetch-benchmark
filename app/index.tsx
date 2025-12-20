@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { Appbar, Button, Text, TextInput } from "react-native-paper";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Button, Text, TextInput } from "react-native-paper";
 import { benchmarks } from "../benchmarks";
 import type { BenchmarkResult, BenchmarkStatus } from "../benchmarks/types";
 import { BenchmarkCard } from "../components/BenchmarkCard";
+import { ResultsChart } from "../components/ResultsChart";
 
 export default function HomeScreen() {
   // https://jsonplaceholder.typicode.com/photos
@@ -49,6 +49,7 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ResultsChart benchmarks={benchmarks} results={results} />
       <View style={styles.controls}>
         <TextInput
           label="Target URL"
