@@ -37,8 +37,12 @@ A React Native / Expo application designed to benchmark different HTTP client im
 - **Start App**: `bun run start` (or `npx expo start`)
 - **Lint & Check**: `bun run check`
 - **Format Code**: `bun run format`
-- **Check Dependencies**: `bunx expo-doctor`
-- **Fix Dependency Versions**: `bun expo install --fix`
+
+Dependency management:
+
+- **Add a new dependency**: `bun expo install`
+- **Check Dependencies** (only if you installed or removed a dependency): `bunx expo-doctor`
+- **Fix Dependency Versions** (only if you installed or removed a dependency): `bun expo install --fix`
 
 ## 5. Maintenance
 
@@ -113,7 +117,4 @@ Complex benchmarks are non fetch-based benchmarks
 
 ## 7. Current Benchmarks
 
-- **Standard Fetch**: Native `fetch` API + `response.blob()`.
-- **Axios**: `axios.get` with `responseType: 'blob'`.
-- **XMLHttpRequest**: Legacy `XMLHttpRequest` with `responseType = 'blob'`.
-- **Expo FileSystem**: `FileSystem.downloadAsync` (tests download-to-disk performance).
+This list changes often, see `benchmarks/index.ts` for up-to-date list and configuration.
