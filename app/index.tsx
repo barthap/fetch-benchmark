@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { Button, Text, TextInput } from "react-native-paper";
@@ -5,7 +6,6 @@ import { benchmarks } from "../benchmarks";
 import type { BenchmarkResult, BenchmarkStatus } from "../benchmarks/types";
 import { BenchmarkCard } from "../components/BenchmarkCard";
 import { ResultsChart } from "../components/ResultsChart";
-import Constants from "expo-constants";
 
 const hostURI = Constants.expoConfig?.hostUri?.split(":")?.[0] ?? "localhost";
 
