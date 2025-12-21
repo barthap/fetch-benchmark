@@ -1,0 +1,754 @@
+diff --git a/common/cpp/MemoryBuffer.cpp b/common/cpp/MemoryBuffer.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..c0b5d992a50b8ae60f88b4c868aac71d91054c2d
+--- /dev/null
++++ b/common/cpp/MemoryBuffer.cpp
+@@ -0,0 +1,24 @@
++#include "MemoryBuffer.h"
++
++namespace expo {
++
++using namespace facebook;
++
++MemoryBuffer::MemoryBuffer(uint8_t* data, size_t size, CleanupFunc&& cleanupFunc)
++  : data_(data), size_(size), cleanupFunc(std::move(cleanupFunc)) {}
++
++MemoryBuffer::~MemoryBuffer() {
++  if (cleanupFunc != nullptr) {
++    cleanupFunc();
++  }
++}
++
++uint8_t* MemoryBuffer::data() {
++  return data_;
++}
++
++size_t MemoryBuffer::size() const {
++  return size_;
++}
++
++}
+diff --git a/common/cpp/MemoryBuffer.h b/common/cpp/MemoryBuffer.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..d36bbbf4d36ad26f6d6920a542eb1745af679b86
+--- /dev/null
++++ b/common/cpp/MemoryBuffer.h
+@@ -0,0 +1,35 @@
++#ifdef __cplusplus
++
++#pragma once
++
++#include <functional>
++#include <jsi/jsi.h>
++
++namespace jsi = facebook::jsi;
++
++namespace expo {
++
++using CleanupFunc = std::function<void()>;
++
++/**
++ * A JSI-compatible memory buffer that allows creating JSI ArrayBuffers from natively-managed memory.
++ * Since ArrayBuffers created from native memory don't automatically deallocate during GC,
++ * this class handles deallocation through a custom cleanup function.
++ */
++class MemoryBuffer final : public jsi::MutableBuffer {
++public:
++  MemoryBuffer(uint8_t* data, size_t size, CleanupFunc&& cleanupFunc);
++  ~MemoryBuffer() override;
++
++  uint8_t* data() override;
++  [[nodiscard]] size_t size() const override;
++
++private:
++  uint8_t* data_;
++  size_t size_;
++  CleanupFunc cleanupFunc;
++};
++
++}
++
++#endif
+diff --git a/ios/Core/ArrayBuffers/AnyArrayBuffer.swift b/ios/Core/ArrayBuffers/AnyArrayBuffer.swift
+new file mode 100644
+index 0000000000000000000000000000000000000000..a86299ff17dfc8239293a8242cd9b7b16827cb12
+--- /dev/null
++++ b/ios/Core/ArrayBuffers/AnyArrayBuffer.swift
+@@ -0,0 +1,19 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++
++/**
++ A protocol for all array buffer types.
++ Array buffers represent a fixed-length raw binary data buffer.
++ */
++internal protocol AnyArrayBuffer: AnyArgument {
++  /**
++   Initializes an array buffer from the given underlying representation.
++   */
++   init(_ backingBuffer: RawArrayBuffer)
++}
++
++// Extend the protocol to provide custom dynamic type
++extension AnyArrayBuffer {
++  public static func getDynamicType() -> AnyDynamicType {
++    return DynamicArrayBufferType(innerType: Self.self)
++  }
++}
+diff --git a/ios/Core/ArrayBuffers/ArrayBuffer.swift b/ios/Core/ArrayBuffers/ArrayBuffer.swift
+new file mode 100644
+index 0000000000000000000000000000000000000000..6ac577064143773191749d3bdaf5499ccf544aa0
+--- /dev/null
++++ b/ios/Core/ArrayBuffers/ArrayBuffer.swift
+@@ -0,0 +1,71 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++
++/**
++ The base class for any type of array buffer.
++ ArrayBuffer objects are used to represent a generic, fixed-length raw binary data buffer.
++ */
++public class ArrayBuffer: AnyArrayBuffer {
++  let backingBuffer: RawArrayBuffer
++
++  /**
++   Initializes the array buffer with the given raw array buffer.
++
++   - Parameter RawArrayBuffer: The underlying raw buffer implementation
++   */
++  internal required init(_ RawArrayBuffer: RawArrayBuffer) {
++    self.backingBuffer = RawArrayBuffer
++  }
++
++  /**
++   The length of the ArrayBuffer in bytes.
++   Fixed at construction time and thus read only.
++   */
++  public lazy var byteLength: Int = backingBuffer.getSize()
++
++  /**
++   The unsafe mutable raw pointer to the start of the array buffer.
++   */
++  public lazy var rawPointer: UnsafeMutableRawPointer = backingBuffer.getUnsafeMutableRawPointer()
++
++  /**
++   Creates a copy of this ArrayBuffer with its own allocated memory.
++
++   - Returns: A new NativeArrayBuffer containing a copy of this buffer's data
++   */
++  public func copy() -> NativeArrayBuffer {
++    ArrayBuffer.copy(of: self)
++  }
++
++  /**
++   Wraps this ArrayBuffer in a Data instance without performing a copy.
++   The returned Data object shares the same memory as this ArrayBuffer.
++
++   - Note: Swift `Data` is a copy-on-write type. Mutating the data
++   doesn't guarantee to modify the array buffer's underlying memory.
++   */
++  public var data: Data {
++      // Get a strong reference to prevent deallocation while Data object exists
++    let sharedPointer = backingBuffer.memoryStrongRef()
++
++    return Data(
++      bytesNoCopy: rawPointer,
++      count: byteLength,
++      deallocator: .custom({ _, _ in sharedPointer?.reset() }))
++  }
++
++  /**
++   Creates an NSMutableData object that shares the same memory as this ArrayBuffer.
++
++   - Returns: An NSMutableData object backed by this ArrayBuffer's memory
++   */
++  public func mutableData() -> NSMutableData {
++      // Get a strong reference to prevent deallocation while NSMutableData object exists
++    let sharedPointer = backingBuffer.memoryStrongRef()
++
++    return NSMutableData(
++      bytesNoCopy: rawPointer,
++      length: byteLength,
++      deallocator: { _, _ in sharedPointer?.reset() }
++    )
++  }
++}
+diff --git a/ios/Core/ArrayBuffers/ArrayBufferExtensions.swift b/ios/Core/ArrayBuffers/ArrayBufferExtensions.swift
+new file mode 100644
+index 0000000000000000000000000000000000000000..dff1de2c8e0468af8a2d5334dc039697eaf16085
+--- /dev/null
++++ b/ios/Core/ArrayBuffers/ArrayBufferExtensions.swift
+@@ -0,0 +1,137 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++
++extension ArrayBuffer {
++  // MARK: - Wrap
++
++  /**
++   Wraps the given raw buffer pointer in an ArrayBuffer without copying data.
++
++   - Parameter data: The raw buffer to wrap
++   - Parameter cleanup: Closure called when the buffer is deallocated
++   - Returns: A new NativeArrayBuffer wrapping the data
++   - Throws: Exception if the buffer has no base address
++   */
++  public static func wrap(
++    dataWithoutCopy data: UnsafeMutableRawBufferPointer,
++    cleanup: @escaping () -> Void
++  ) throws -> NativeArrayBuffer {
++    guard let baseAddress = data.baseAddress else {
++      throw MissingBaseAddressError()
++    }
++    return NativeArrayBuffer(wrapping: baseAddress, count: data.count, cleanup: cleanup)
++  }
++
++  /**
++   Zero-copy wraps the given Data object in an ArrayBuffer.
++
++   - Warning: This bypasses Data's copy-on-write capabilities, effectively allowing
++   mutation of the Data from JavaScript code.
++   - Parameter data: The Data object to wrap
++   - Returns: An ArrayBuffer sharing memory with the Data object
++   */
++  public static func wrap(dataWithoutCopy data: Data) -> ArrayBuffer {
++    let size = data.count
++    let unamanagedData = Unmanaged.passRetained(data as NSData)
++
++    let pointer: UnsafePointer<UInt8> = unamanagedData
++      .takeUnretainedValue()
++      .bytes
++      .assumingMemoryBound(to: UInt8.self)
++    let mutablePtr = UnsafeMutablePointer(mutating: pointer)
++
++      // This should manage the memory of the underlying Data manually
++    return NativeArrayBuffer(wrapping: mutablePtr, count: size, cleanup: { unamanagedData.release() })
++  }
++
++  // MARK: - Allocate
++
++  /**
++   Allocates a new native ArrayBuffer of the given size.
++
++   - Parameter size: The size of the buffer in bytes
++   - Parameter initializeToZero: If true, all bytes are set to 0, otherwise they are uninitialized
++   - Returns: A new NativeArrayBuffer with the allocated memory
++   */
++  public static func allocate(size: Int, initializeToZero: Bool = false) -> NativeArrayBuffer {
++    let data = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
++    if initializeToZero {
++      data.initialize(repeating: 0, count: size)
++    }
++    return NativeArrayBuffer(wrapping: data, count: size, cleanup: { data.deallocate() })
++  }
++
++  // MARK: - Copy
++
++  /**
++   Copies the given raw pointer into a new native ArrayBuffer.
++
++   - Parameter other: The pointer to copy data from
++   - Parameter count: The number of bytes to copy
++   - Returns: A new NativeArrayBuffer containing a copy of the data
++   */
++  public static func copy(
++    of other: UnsafeRawPointer,
++    count: Int
++  ) -> NativeArrayBuffer {
++    let copy = UnsafeMutablePointer<UInt8>.allocate(capacity: count)
++    copy.initialize(from: other.assumingMemoryBound(to: UInt8.self), count: count)
++    return NativeArrayBuffer(wrapping: copy, count: count, cleanup: { copy.deallocate() })
++  }
++
++  public static func copy(of other: UnsafeRawBufferPointer) throws -> NativeArrayBuffer {
++    guard let baseAddress = other.baseAddress else {
++      throw MissingBaseAddressError()
++    }
++    return ArrayBuffer.copy(of: baseAddress, count: other.count)
++  }
++
++  /**
++   Copies the given Data into a new native ArrayBuffer.
++
++   - Parameter data: The Data object to copy
++   - Returns: A new NativeArrayBuffer containing a copy of the data
++   - Throws: Exception if unable to access the Data's bytes
++   */
++  public static func copy(data: Data) throws -> NativeArrayBuffer {
++      // 1. Create new `ArrayBuffer` of same size
++    let size = data.count
++    let arrayBuffer = ArrayBuffer.allocate(size: size)
++      // 2. Copy all bytes from `Data` into our new `ArrayBuffer`
++
++    try data.withUnsafeBytes { rawPointer in
++      guard let baseAddress = rawPointer.baseAddress else {
++        throw MissingBaseAddressError()
++      }
++
++      memcpy(arrayBuffer.rawPointer, baseAddress, size)
++    }
++    return arrayBuffer
++  }
++
++  /**
++   Copies the given ArrayBuffer into a new native ArrayBuffer.
++
++   - Parameter other: The ArrayBuffer to copy
++   - Returns: A new NativeArrayBuffer containing a copy of the data
++   */
++  public static func copy(of other: ArrayBuffer) -> NativeArrayBuffer {
++    ArrayBuffer.copy(of: other.rawPointer, count: other.byteLength)
++  }
++}
++
++// MARK: - Data
++
++extension ArrayBuffer: ContiguousBytes {
++  public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
++    try body(UnsafeRawBufferPointer(start: self.rawPointer, count: self.byteLength))
++  }
++}
++
++/**
++ An exception thrown when `baseAddress` of `UnsafeMutableRawBufferPointer` is `nil`.
++ */
++public final class MissingBaseAddressError: Exception, @unchecked Sendable {
++  override public var reason: String {
++    "Cannot get baseAddress of given data"
++  }
++}
+diff --git a/ios/Core/ArrayBuffers/ConcreteArrayBuffers.swift b/ios/Core/ArrayBuffers/ConcreteArrayBuffers.swift
+new file mode 100644
+index 0000000000000000000000000000000000000000..b701090457ff40d40ef6b252a64220442fef1767
+--- /dev/null
++++ b/ios/Core/ArrayBuffers/ConcreteArrayBuffers.swift
+@@ -0,0 +1,26 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++
++/**
++ Generic ArrayBuffer with an associated raw buffer type.
++ */
++public class GenericArrayBuffer<BufferType: RawArrayBuffer>: ArrayBuffer {
++  internal convenience init(_ backingBuffer: BufferType) {
++    self.init(backingBuffer as RawArrayBuffer)
++  }
++}
++
++/**
++ Native ArrayBuffer implementation that owns its memory and manages deallocation.
++ */
++public final class NativeArrayBuffer: GenericArrayBuffer<RawNativeArrayBuffer> {
++  convenience init(wrapping data: UnsafeMutableRawPointer, count: Int, cleanup: @escaping () -> Void) {
++    let backingBuffer = RawNativeArrayBuffer(data: data, size: count, cleanup: cleanup)
++    self.init(backingBuffer)
++  }
++}
++
++/**
++ JavaScript ArrayBuffer implementation that wraps a JavaScript ArrayBuffer object.
++ This provides a native Swift interface to ArrayBuffers created in JavaScript.
++ */
++public final class JavaScriptArrayBuffer: GenericArrayBuffer<RawJavaScriptArrayBuffer> {}
+diff --git a/ios/Core/DynamicTypes/DynamicArrayBufferType.swift b/ios/Core/DynamicTypes/DynamicArrayBufferType.swift
+new file mode 100644
+index 0000000000000000000000000000000000000000..7824b57d4e86333e0ae191aa350ae790c44c98ee
+--- /dev/null
++++ b/ios/Core/DynamicTypes/DynamicArrayBufferType.swift
+@@ -0,0 +1,57 @@
++// Copyright 2015-present 650 Industries. All rights reserved.
++
++internal struct DynamicArrayBufferType: AnyDynamicType {
++  let innerType: AnyArrayBuffer.Type
++
++  func wraps<InnerType>(_ type: InnerType.Type) -> Bool {
++    return innerType == InnerType.self
++  }
++
++  func equals(_ type: AnyDynamicType) -> Bool {
++    if let arrayBufferType = type as? Self {
++      return arrayBufferType.innerType == innerType
++    }
++    return false
++  }
++
++  /**
++   Converts JS array buffer to its native representation.
++   */
++  func cast(jsValue: JavaScriptValue, appContext: AppContext) throws -> Any {
++    guard let rawArrayBuffer = jsValue.getArrayBuffer() else {
++      throw NotArrayBufferException(innerType)
++    }
++    let jsArrayBuffer = JavaScriptArrayBuffer(rawArrayBuffer)
++
++    return switch innerType {
++      case is JavaScriptArrayBuffer.Type: jsArrayBuffer
++      case is NativeArrayBuffer.Type: jsArrayBuffer.copy()
++      // this might happen when a user implemented own subclass of ArrayBuffer
++      // or uses 'ArrayBuffer' directly
++      default: throw ArrayBufferArgumentTypeException(innerType)
++    }
++  }
++
++  func convertResult<ResultType>(_ result: ResultType, appContext: AppContext) throws -> Any {
++    guard let arrayBuffer = result as? ArrayBuffer else {
++      throw Conversions.ConversionToJSFailedException((kind: .object, nativeType: ResultType.self))
++    }
++    return arrayBuffer.backingBuffer
++  }
++
++  var description: String {
++    return String(describing: Data.self)
++  }
++}
++
++internal final class NotArrayBufferException: GenericException<AnyArrayBuffer.Type>, @unchecked Sendable {
++  override var reason: String {
++    "Given argument is not an instance of \(param)"
++  }
++}
++
++internal final class ArrayBufferArgumentTypeException: GenericException<AnyArrayBuffer.Type>, @unchecked Sendable {
++  override var reason: String {
++    "\(param) cannot be used as argument type. Use either JavaScriptArrayBuffer or NativeArrayBuffer"
++  }
++}
+diff --git a/ios/JSI/EXArrayBuffer.h b/ios/JSI/EXArrayBuffer.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e58b049586c9d0678f6bf870ec696906635cd256
+--- /dev/null
++++ b/ios/JSI/EXArrayBuffer.h
+@@ -0,0 +1,45 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++
++#ifdef __cplusplus
++#import <jsi/jsi.h>
++#import <ExpoModulesCore/MemoryBuffer.h>
++#endif
++
++/**
++ * A reference-counting wrapper around ArrayBuffer memory to manage lifetime.
++ * Used to ensure ArrayBuffer memory remains valid when shared between
++ * Swift Data objects and the underlying buffer.
++ */
++@interface EXArrayBufferStrongRef : NSObject
++
++#ifdef __cplusplus
++- (nonnull instancetype)initWith:(std::shared_ptr<expo::MemoryBuffer>)ptr;
++#endif
++
++/**
++ * Releases the strong reference to the underlying memory buffer.
++ * After calling this method, the memory may be deallocated.
++ */
++- (void)reset;
++@end
++
++/**
++ * Protocol defining the interface for raw ArrayBuffer implementations.
++ * Provides access to the underlying memory and size information.
++ */
++NS_SWIFT_NAME(RawArrayBuffer)
++@protocol EXArrayBuffer
++
++- (size_t)getSize;
++
++- (nonnull void *)getUnsafeMutableRawPointer;
++
++/**
++ * Returns a strong reference to the underlying memory buffer, or nil if not applicable.
++ * Used to prevent deallocation when the memory is shared with other objects.
++ */
++- (EXArrayBufferStrongRef *_Nullable)memoryStrongRef;
++
++@end
++
++
+diff --git a/ios/JSI/EXArrayBuffer.mm b/ios/JSI/EXArrayBuffer.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..e438fce322412342828652baf60f0d7c6f05a438
+--- /dev/null
++++ b/ios/JSI/EXArrayBuffer.mm
+@@ -0,0 +1,22 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++
++#import <ExpoModulesCore/EXArrayBuffer.h>
++#import <ExpoModulesCore/MemoryBuffer.h>
++
++@implementation EXArrayBufferStrongRef {
++  std::shared_ptr<expo::MemoryBuffer> _ptr;
++}
++
++- (nonnull instancetype)initWith:(std::shared_ptr<expo::MemoryBuffer>)ptr {
++  if (self = [super init]) {
++    _ptr = ptr;
++  }
++  return self;
++}
++
++- (void)reset
++{
++  _ptr.reset();
++}
++
++@end
+diff --git a/ios/JSI/EXJSIConversions.mm b/ios/JSI/EXJSIConversions.mm
+index b33b454e7e87a4c8b3da2868840fcc75cae53562..b563018ee93e7eebb314ec0f6f0fe37709960b67 100644
+--- a/ios/JSI/EXJSIConversions.mm
++++ b/ios/JSI/EXJSIConversions.mm
+@@ -9,6 +9,7 @@
+ #import <ExpoModulesCore/EXJavaScriptRuntime.h>
+ #import <ExpoModulesCore/EXJavaScriptSharedObjectBinding.h>
+ #import <ExpoModulesCore/EXStringUtils.h>
++#import <ExpoModulesCore/EXNativeArrayBuffer.h>
+ #import <Foundation/NSURL.h>
+ 
+ namespace expo {
+@@ -102,6 +103,10 @@
+   if ([value isKindOfClass:[EXJavaScriptSharedObjectBinding class]]) {
+     return jsi::Value(runtime, *[[(EXJavaScriptSharedObjectBinding *)value get] get]);
+   }
++  if ([value isKindOfClass:[EXNativeArrayBuffer class]]) {
++    auto memoryBuffer = [(EXNativeArrayBuffer *)value jsiBuffer];
++    return jsi::ArrayBuffer(runtime, memoryBuffer);
++  }
+   if ([value isKindOfClass:[NSString class]]) {
+     return convertNSStringToJSIString(runtime, (NSString *)value);
+   } else if ([value isKindOfClass:[NSNumber class]]) {
+diff --git a/ios/JSI/EXJavaScriptValue.h b/ios/JSI/EXJavaScriptValue.h
+index 94ba8bfdb63d289ba0caba8b5049ab457662cc0b..95e37dbfb479553cdca4f6b4ec45b0d5e1606892 100644
+--- a/ios/JSI/EXJavaScriptValue.h
++++ b/ios/JSI/EXJavaScriptValue.h
+@@ -11,6 +11,7 @@ namespace jsi = facebook::jsi;
+ @class EXJavaScriptRuntime;
+ @class EXRawJavaScriptFunction;
+ @class EXJavaScriptTypedArray;
++@class EXJavaScriptArrayBuffer;
+ 
+ /**
+  Represents any JavaScript value. Its purpose is to exposes `facebook::jsi::Value` API back to Swift.
+@@ -39,6 +40,7 @@ NS_SWIFT_NAME(JavaScriptValue)
+ - (BOOL)isObject;
+ - (BOOL)isFunction;
+ - (BOOL)isTypedArray;
++- (BOOL)isArrayBuffer;
+ 
+ #pragma mark - Type casting
+ 
+@@ -52,6 +54,7 @@ NS_SWIFT_NAME(JavaScriptValue)
+ - (nonnull EXJavaScriptObject *)getObject;
+ - (nonnull EXRawJavaScriptFunction *)getFunction;
+ - (nullable EXJavaScriptTypedArray *)getTypedArray;
++- (nullable EXJavaScriptArrayBuffer *)getArrayBuffer;
+ 
+ #pragma mark - Helpers
+ 
+diff --git a/ios/JSI/EXJavaScriptValue.mm b/ios/JSI/EXJavaScriptValue.mm
+index ee135f73ff62809c1b190183b322c7ce610b4c8d..fc40a2960ead56839ad601e8a11f7564c6eb5567 100644
+--- a/ios/JSI/EXJavaScriptValue.mm
++++ b/ios/JSI/EXJavaScriptValue.mm
+@@ -5,6 +5,7 @@
+ #import <ExpoModulesCore/EXJavaScriptRuntime.h>
+ #import <ExpoModulesCore/EXRawJavaScriptFunction.h>
+ #import <ExpoModulesCore/EXJavaScriptTypedArray.h>
++#import <ExpoModulesCore/EXRawJavaScriptArrayBuffer.h>
+ #import <ExpoModulesCore/TypedArray.h>
+ 
+ @implementation EXJavaScriptValue {
+@@ -86,6 +87,16 @@ - (BOOL)isTypedArray
+   return false;
+ }
+ 
++- (BOOL)isArrayBuffer
++{
++  if (_value.isObject()) {
++    jsi::Runtime *runtime = [_runtime get];
++    return _value.getObject(*runtime).isArrayBuffer(*runtime);
++  }
++  return false;
++}
++
++
+ #pragma mark - Type casting
+ 
+ - (nullable id)getRaw
+@@ -158,6 +169,17 @@ - (nullable EXJavaScriptTypedArray *)getTypedArray
+   return [[EXJavaScriptTypedArray alloc] initWith:objectPtr runtime:_runtime];
+ }
+ 
++- (nullable EXJavaScriptArrayBuffer *)getArrayBuffer
++{
++  if (![self isArrayBuffer]) {
++    return nil;
++  }
++  jsi::Runtime *runtime = [_runtime get];
++  std::shared_ptr<jsi::Object> objectPtr = std::make_shared<jsi::Object>(_value.asObject(*runtime));
++  return [[EXJavaScriptArrayBuffer alloc] initWith:objectPtr runtime:_runtime];
++}
++
++
+ #pragma mark - Helpers
+ 
+ - (nonnull NSString *)toString
+diff --git a/ios/JSI/EXNativeArrayBuffer.h b/ios/JSI/EXNativeArrayBuffer.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..9bef2d86bb9e678f026dec5a494791fb1592d70b
+--- /dev/null
++++ b/ios/JSI/EXNativeArrayBuffer.h
+@@ -0,0 +1,31 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++
++#ifdef __cplusplus
++#import <jsi/jsi.h>
++
++namespace jsi = facebook::jsi;
++#endif // __cplusplus
++
++#import <ExpoModulesCore/EXArrayBuffer.h>
++
++/**
++ * Native ArrayBuffer implementation that manages its own memory allocation.
++ * This is used for ArrayBuffers created from native code that own their memory.
++ */
++NS_SWIFT_NAME(RawNativeArrayBuffer)
++@interface EXNativeArrayBuffer : NSObject<EXArrayBuffer>
++
++- (nonnull instancetype)initWithData:(uint8_t*_Nonnull)data
++                                size:(size_t)size
++                             cleanup:(void (^_Nonnull)(void))cleanup
++NS_SWIFT_NAME(init(data:size:cleanup:));
++
++
++#ifdef __cplusplus
++/**
++ Returns a shared pointer to the underlying memory that can be used to create a JSI ArrayBuffer.
++ */
++- (std::shared_ptr<jsi::MutableBuffer>)jsiBuffer;
++#endif
++
++@end
+diff --git a/ios/JSI/EXNativeArrayBuffer.mm b/ios/JSI/EXNativeArrayBuffer.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..e85b0b117e82b1cb7051646af6e4ff403eb9ce63
+--- /dev/null
++++ b/ios/JSI/EXNativeArrayBuffer.mm
+@@ -0,0 +1,37 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++
++#import <ExpoModulesCore/EXNativeArrayBuffer.h>
++#import <ExpoModulesCore/MemoryBuffer.h>
++
++@implementation EXNativeArrayBuffer {
++  std::shared_ptr<expo::MemoryBuffer> _buffer;
++}
++
++- (nonnull instancetype)initWithData:(uint8_t*)data
++                                size:(size_t)size
++                             cleanup:(void (^)(void))cleanup
++{
++  if (self = [super init]) {
++    expo::CleanupFunc cleanupFn = [=]() { cleanup(); };
++    _buffer = std::make_shared<expo::MemoryBuffer>(data, size, std::move(cleanupFn));
++  }
++  return self;
++}
++
++- (std::shared_ptr<jsi::MutableBuffer>)jsiBuffer {
++  return _buffer;
++}
++
++- (size_t)getSize {
++  return _buffer->size();
++}
++
++- (nonnull void *)getUnsafeMutableRawPointer {
++  return _buffer->data();
++}
++
++- (EXArrayBufferStrongRef * _Nullable)memoryStrongRef {
++  return [[EXArrayBufferStrongRef alloc] initWith:_buffer];
++}
++
++@end
+diff --git a/ios/JSI/EXRawJavaScriptArrayBuffer.h b/ios/JSI/EXRawJavaScriptArrayBuffer.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..c9314b2b3f682bbec1d420a9e7c8f20aa624c074
+--- /dev/null
++++ b/ios/JSI/EXRawJavaScriptArrayBuffer.h
+@@ -0,0 +1,15 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++
++#import <Foundation/Foundation.h>
++#import <ExpoModulesCore/EXArrayBuffer.h>
++#import <ExpoModulesCore/EXJavaScriptObject.h>
++
++/**
++ * JavaScript ArrayBuffer implementation that wraps a JSI ArrayBuffer.
++ * This provides access to ArrayBuffers created in JavaScript from native code.
++ */
++NS_SWIFT_NAME(RawJavaScriptArrayBuffer)
++@interface EXJavaScriptArrayBuffer : EXJavaScriptObject<EXArrayBuffer>
++
++@end
++
+diff --git a/ios/JSI/EXRawJavaScriptArrayBuffer.mm b/ios/JSI/EXRawJavaScriptArrayBuffer.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..8baf8b98cd618130db5cf09765b8c23cf895cb41
+--- /dev/null
++++ b/ios/JSI/EXRawJavaScriptArrayBuffer.mm
+@@ -0,0 +1,41 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++
++#import <ExpoModulesCore/EXJavaScriptRuntime.h>
++#import <ExpoModulesCore/EXRawJavaScriptArrayBuffer.h>
++
++@implementation EXJavaScriptArrayBuffer {
++  __weak EXJavaScriptRuntime *_runtime;
++  
++  std::shared_ptr<jsi::ArrayBuffer> _jsiBuffer;
++}
++
++- (nonnull instancetype)initWith:(std::shared_ptr<jsi::Object>)jsObjectPtr
++                         runtime:(EXJavaScriptRuntime *)runtime
++{
++  jsi::Runtime *rt = [runtime get];
++  if (!jsObjectPtr.get()->isArrayBuffer(*rt)) {
++    throw std::runtime_error("Object is not an ArrayBuffer");
++  }
++  
++  if (self = [super initWith:jsObjectPtr runtime:runtime]) {
++    _runtime = runtime;
++    _jsiBuffer = std::make_shared<jsi::ArrayBuffer>(jsObjectPtr.get()->getArrayBuffer(*rt));
++  }
++  return self;
++}
++
++- (size_t)getSize {
++  return _jsiBuffer->size(*[_runtime get]);
++}
++
++- (nonnull void *)getUnsafeMutableRawPointer {
++  return _jsiBuffer->data(*[_runtime get]);
++}
++
++- (EXArrayBufferStrongRef * _Nullable)memoryStrongRef {
++    // JavaScript ArrayBuffers don't provide direct strong references to the underlying
++    // memory since the JS runtime  owns the memory and manages its lifetime.
++  return nullptr;
++}
++
++@end
+diff --git a/ios/JSI/JavaScriptValue.swift b/ios/JSI/JavaScriptValue.swift
+index 6083143dd888586a272e5b211070b90b4504f2ce..4aa8ab3113f83d1a41a8a681a08db8ba81b0ba7b 100644
+--- a/ios/JSI/JavaScriptValue.swift
++++ b/ios/JSI/JavaScriptValue.swift
+@@ -115,6 +115,13 @@ extension JavaScriptValue: AnyJavaScriptValue, AnyArgument {
+     }
+     throw JavaScriptValueConversionException((kind: kind, target: "TypedArray"))
+   }
++  
++  func asArrayBuffer() throws -> JavaScriptArrayBuffer {
++    if let backingBuffer = getArrayBuffer() {
++      return JavaScriptArrayBuffer(backingBuffer)
++    }
++    throw JavaScriptValueConversionException((kind: kind, target: "ArrayBuffer"))
++  }
+ 
+   // MARK: - AnyJavaScriptValue
+ 
