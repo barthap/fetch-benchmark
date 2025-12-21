@@ -9,19 +9,21 @@ import { ResultsChart } from "../components/ResultsChart";
 
 const hostURI = Constants.expoConfig?.hostUri?.split(":")?.[0] ?? "localhost";
 
+const allIDs = new Set(benchmarks.map((b) => b.id));
+
 export default function HomeScreen() {
   // https://jsonplaceholder.typicode.com/photos
   const [url, SHUrl] = useState(`http://${hostURI}:8000/employees_50MB.json`);
   const [statuses, setStatuses] = useState<Record<string, BenchmarkStatus>>({});
   const [results, setResults] = useState<Record<string, BenchmarkResult>>({});
-  const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>(() =>
-    benchmarks.map((b) => b.id),
-  );
+  const [selectedBenchmarks, setSelectedBenchmarks] = useState<Set<string>>(() => new Set(allIDs));
 
   const toggleBenchmark = (id: string) => {
-    setSelectedBenchmarks((prev) =>
-      prev.includes(id) ? prev.filter((bId) => bId !== id) : [...prev, id],
-    );
+    setSelectedBenchmarks((prev) => {
+      const items = new Set(prev);
+      items.has(id) ? items.delete(id) : items.add(id);
+      return items;
+    });
   };
 
   const runBenchmark = async (id: string) => {
@@ -55,7 +57,7 @@ export default function HomeScreen() {
 
   const runAll = async () => {
     for (const b of benchmarks) {
-      if (selectedBenchmarks.includes(b.id)) {
+      if (selectedBenchmarks.has(b.id)) {
         console.log(`Running benchmark: ${b.category} - ${b.name}`);
         await runBenchmark(b.id);
       }
@@ -78,14 +80,14 @@ export default function HomeScreen() {
         <View style={styles.buttonRow}>
           <Button
             mode="contained-tonal"
-            onPress={() => setSelectedBenchmarks(benchmarks.map((b) => b.id))}
+            onPress={() => setSelectedBenchmarks(new Set(allIDs))}
             style={styles.flexButton}
           >
             Select All
           </Button>
           <Button
             mode="contained-tonal"
-            onPress={() => setSelectedBenchmarks([])}
+            onPress={() => setSelectedBenchmarks(new Set())}
             style={styles.flexButton}
           >
             Deselect All
@@ -108,7 +110,7 @@ export default function HomeScreen() {
             status={statuses[b.id] || "idle"}
             result={results[b.id]}
             onRun={() => runBenchmark(b.id)}
-            isSelected={selectedBenchmarks.includes(b.id)}
+            isSelected={selectedBenchmarks.has(b.id)}
             onToggle={() => toggleBenchmark(b.id)}
           />
         ))
