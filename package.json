@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "check": "biome check .",
     "format": "biome format --write .",
-    "lint": "biome lint ."
+    "lint": "biome lint .",
+    "serve": "cd fixtures && python3 -m http.server"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

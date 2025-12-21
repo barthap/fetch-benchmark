@@ -5,10 +5,13 @@ import { benchmarks } from "../benchmarks";
 import type { BenchmarkResult, BenchmarkStatus } from "../benchmarks/types";
 import { BenchmarkCard } from "../components/BenchmarkCard";
 import { ResultsChart } from "../components/ResultsChart";
+import Constants from "expo-constants";
+
+const hostURI = Constants.expoConfig?.hostUri?.split(":")?.[0] ?? "localhost";
 
 export default function HomeScreen() {
   // https://jsonplaceholder.typicode.com/photos
-  const [url, SHUrl] = useState("http://localhost:8000/employees_50MB.json");
+  const [url, SHUrl] = useState(`http://${hostURI}:8000/employees_50MB.json`);
   const [statuses, setStatuses] = useState<Record<string, BenchmarkStatus>>({});
   const [results, setResults] = useState<Record<string, BenchmarkResult>>({});
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>(() =>
@@ -53,6 +56,7 @@ export default function HomeScreen() {
   const runAll = async () => {
     for (const b of benchmarks) {
       if (selectedBenchmarks.includes(b.id)) {
+        console.log(`Running benchmark: ${b.category} - ${b.name}`);
         await runBenchmark(b.id);
       }
     }
