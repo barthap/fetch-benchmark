@@ -19,3 +19,9 @@ export interface Benchmark {
 export interface BasicBenchmark extends Omit<Benchmark, "run"> {
   run: (url: string) => Promise<Response>;
 }
+
+export interface PrefetchedBenchmark extends Omit<Benchmark, "run"> {
+  prefetch: (url: string) => Promise<Response>;
+  run: (response: Response) => Promise<void>;
+  measurePrefetchTime?: boolean;
+}

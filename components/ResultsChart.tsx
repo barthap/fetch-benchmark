@@ -42,7 +42,7 @@ export const ResultsChart = ({ benchmarks, results }: ResultsChartProps) => {
 
   return (
     <Card style={styles.card}>
-      <Card.Title title="Benchmark Results" />
+      <Card.Title title="Benchmark Results (50MB JSON)" />
       <Card.Content>
         <View style={styles.chart}>
           {completedResults.map((result, index) => {
@@ -51,22 +51,23 @@ export const ResultsChart = ({ benchmarks, results }: ResultsChartProps) => {
 
             return (
               <View key={result.id} style={styles.barContainer}>
-                <View style={styles.barLabel}>
-                  <Text style={{ fontWeight: "bold" }}>{result.category}</Text>
-                  <Text>{result.name}</Text>
+                <Text style={styles.barLabel}>
+                  <Text style={{ fontWeight: "bold" }}>{result.category}:</Text> {result.name}
+                </Text>
+                <View style={styles.barRow}>
+                  <View style={styles.barWrapper}>
+                    <View
+                      style={[
+                        styles.bar,
+                        {
+                          width: `${width}%`,
+                          backgroundColor: color,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.barValue}>{result.duration.toFixed(0)} ms</Text>
                 </View>
-                <View style={styles.barWrapper}>
-                  <View
-                    style={[
-                      styles.bar,
-                      {
-                        width: `${width}%`,
-                        backgroundColor: color,
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.barValue}>{result.duration.toFixed(2)} ms</Text>
               </View>
             );
           })}
@@ -81,15 +82,17 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   chart: {
-    gap: 10,
+    gap: 12,
   },
   barContainer: {
+    gap: 4,
+  },
+  barRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
   barLabel: {
-    width: 80,
     fontSize: 12,
   },
   barWrapper: {

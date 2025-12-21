@@ -4,18 +4,18 @@ import { fetch as nitroFetch } from "react-native-nitro-fetch";
 import type { Benchmark } from "./types";
 import { makeBenchmark } from "./utils";
 
+const measurePrefetchTime = true;
+
 export const benchmarks: Benchmark[] = [
-  // fetchBenchmark,
-  // expoFetchBenchmark,
   makeBenchmark({
     id: "res-json",
     name: "res.json()",
     category: "Built-in",
     description: "Parse response as JSON",
-    run: async (url: string): Promise<Response> => {
-      const response = await fetch(url);
+    prefetch: fetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.json();
-      return response;
     },
   }),
   makeBenchmark({
@@ -23,10 +23,10 @@ export const benchmarks: Benchmark[] = [
     name: "res.text()",
     category: "Built-in",
     description: "Parse response as text",
-    run: async (url: string): Promise<Response> => {
-      const response = await fetch(url);
+    prefetch: fetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.text();
-      return response;
     },
   }),
   makeBenchmark({
@@ -34,11 +34,11 @@ export const benchmarks: Benchmark[] = [
     name: "res.text() and JSON.parse",
     category: "Built-in",
     description: "Parse plain text as JSON",
-    run: async (url: string): Promise<Response> => {
-      const response = await fetch(url);
+    prefetch: fetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.text();
       const _json = JSON.parse(_result);
-      return response;
     },
   }),
   makeBenchmark({
@@ -46,10 +46,10 @@ export const benchmarks: Benchmark[] = [
     name: "res.arrayBuffer()",
     category: "Built-in",
     description: "Parse response as ArrayBuffer",
-    run: async (url: string): Promise<Response> => {
-      const response = await fetch(url);
+    prefetch: fetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.arrayBuffer();
-      return response;
     },
   }),
   makeBenchmark({
@@ -57,11 +57,11 @@ export const benchmarks: Benchmark[] = [
     name: "res.text() and TextEncoder",
     category: "Built-in",
     description: "Encode text string to bytes",
-    run: async (url: string): Promise<Response> => {
-      const response = await fetch(url);
+    prefetch: fetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const text = await response.text();
       const _bytes = new TextEncoder().encode(text);
-      return response;
     },
   }),
   // expo-fetch
@@ -70,10 +70,10 @@ export const benchmarks: Benchmark[] = [
     name: "res.json()",
     category: "Expo",
     description: "Parse response as JSON",
-    run: async (url: string): Promise<Response> => {
-      const response = await expoFetch(url);
+    prefetch: expoFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.json();
-      return response;
     },
   }),
   makeBenchmark({
@@ -81,10 +81,10 @@ export const benchmarks: Benchmark[] = [
     name: "res.text()",
     category: "Expo",
     description: "Parse response as text",
-    run: async (url: string): Promise<Response> => {
-      const response = await expoFetch(url);
+    prefetch: expoFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.text();
-      return response;
     },
   }),
   makeBenchmark({
@@ -92,22 +92,34 @@ export const benchmarks: Benchmark[] = [
     name: "res.text() and JSON.parse",
     category: "Expo",
     description: "Parse plain text as JSON",
-    run: async (url: string): Promise<Response> => {
-      const response = await expoFetch(url);
+    prefetch: expoFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.text();
       const _json = JSON.parse(_result);
-      return response;
     },
   }),
   makeBenchmark({
     id: "expo-res-array-buffer",
-    name: "res.ArrayBuffer()",
+    name: "res.arrayBuffer()",
     category: "Expo",
     description: "Parse response as ArrayBuffer",
-    run: async (url: string): Promise<Response> => {
-      const response = await expoFetch(url);
+    prefetch: expoFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.arrayBuffer();
-      return response;
+    },
+  }),
+  makeBenchmark({
+    id: "expo-res-array-buffer2",
+    name: "Zero-copy ArrayBuffer",
+    category: "Expo",
+    description: "Parse response as ArrayBuffer",
+    prefetch: expoFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
+      // @ts-expect-error
+      const _result = await response.arrayBuffer2();
     },
   }),
   makeBenchmark({
@@ -115,11 +127,11 @@ export const benchmarks: Benchmark[] = [
     name: "res.text() and TextEncoder",
     category: "Expo",
     description: "Encode text string to bytes",
-    run: async (url: string): Promise<Response> => {
-      const response = await expoFetch(url);
+    prefetch: expoFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const text = await response.text();
       const _bytes = new TextEncoder().encode(text);
-      return response;
     },
   }),
   // nitro-fetch
@@ -128,10 +140,10 @@ export const benchmarks: Benchmark[] = [
     name: "res.json()",
     category: "Nitro",
     description: "Parse response as JSON",
-    run: async (url: string): Promise<Response> => {
-      const response = await nitroFetch(url);
+    prefetch: nitroFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.json();
-      return response;
     },
   }),
   makeBenchmark({
@@ -139,10 +151,10 @@ export const benchmarks: Benchmark[] = [
     name: "res.text()",
     category: "Nitro",
     description: "Parse response as text",
-    run: async (url: string): Promise<Response> => {
-      const response = await nitroFetch(url);
+    prefetch: nitroFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.text();
-      return response;
     },
   }),
   makeBenchmark({
@@ -150,22 +162,22 @@ export const benchmarks: Benchmark[] = [
     name: "res.text() and JSON.parse",
     category: "Nitro",
     description: "Parse plain text as JSON",
-    run: async (url: string): Promise<Response> => {
-      const response = await nitroFetch(url);
+    prefetch: nitroFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.text();
       const _json = JSON.parse(_result);
-      return response;
     },
   }),
   makeBenchmark({
     id: "nitro-res-array-buffer",
-    name: "res.ArrayBuffer()",
+    name: "res.arrayBuffer()",
     category: "Nitro",
     description: "Parse response as ArrayBuffer",
-    run: async (url: string): Promise<Response> => {
-      const response = await nitroFetch(url);
+    prefetch: nitroFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const _result = await response.arrayBuffer();
-      return response;
     },
   }),
   makeBenchmark({
@@ -173,11 +185,11 @@ export const benchmarks: Benchmark[] = [
     name: "res.text() and TextEncoder",
     category: "Nitro",
     description: "Encode text string to bytes",
-    run: async (url: string): Promise<Response> => {
-      const response = await nitroFetch(url);
+    prefetch: nitroFetch,
+    measurePrefetchTime,
+    run: async (response: Response): Promise<void> => {
       const text = await response.text();
       const _bytes = new TextEncoder().encode(text);
-      return response;
     },
   }),
   // axiosBenchmark,
