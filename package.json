@@ -11,7 +11,8 @@
     "check": "biome check .",
     "format": "biome format --write .",
     "lint": "biome lint .",
-    "serve": "cd fixtures && python3 -m http.server"
+    "serve": "cd fixtures && python3 -m http.server",
+    "edit:android": "open -a '/Applications/Android Studio.app' ./android"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
