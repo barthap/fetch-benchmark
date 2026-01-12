@@ -1,50 +1,36 @@
-# Welcome to your Expo app 👋
+# Fetch response implementations benchmark for React Native
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Recreated benchmarks from [this tweet on X](https://x.com/ddunderfelt/status/1998484818196144291) to compare:
 
-## Get started
+- RN built-in fetch
+- [Expo fetch](https://docs.expo.dev/versions/latest/sdk/expo/#expofetch-api)
+- [react-native-nitro-fetch](https://github.com/margelo/react-native-nitro-fetch?tab=readme-ov-file)
 
-1. Install dependencies
+## Benchmarks
 
-   ```bash
-   npm install
-   ```
+All benchmakrs are defined in [`benchmarks/index.ts`](./benchmarks/index.ts).
 
-2. Start the app
+### Methodology
 
-   ```bash
-   npx expo start
-   ```
+- **JSON payload:** Used 50MB json from [this page](https://sample.json-format.com/). It should be placed in the [`fixtures/`](./fixtures/) directory.
+- **Localhost hosted** to mitigate networking impact _(some libraries do proecessing during the `await fetch()` call instead of `await response.<<desiredFormat>>()` so networking time could not be fully separated.)__
+  - Used `cd fixtures && python3 -m http.server` (or `bun run serve`) for simulator/Localhost.
+  - Used [PocketServer](https://apps.apple.com/us/app/pocketserver-folder-sharing/id6743850070) app on physical iOS.
+  - The app is also [available on Android](https://play.google.com/store/apps/details?id=com.zdworks.pocketserver).
 
-In the output, you'll find options to open the app in a
+### Sample results
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Some random results are available in the [`screenshots`](./screenshots/) directory.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+<img width="300" src="./screenshots/Simulator Screenshot - iPhone 17 Pro - 2025-12-21 at 02.08.58.png" />
 
-## Get a fresh project
+## Patched files
 
-When you're ready, run:
+In the [`patches`](./patches/) there are two patches:
 
-```bash
-npm run reset-project
-```
+- `expo` - added zero-copy `arrayBuffer2()` to compare memory copying cost
+- `expo-modules-core` - (needed for the above) implementations for native ArrayBuffers that have not been released yet.
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+_This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app). App UI was vibe-coded._

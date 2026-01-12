@@ -1,3 +1,837 @@
+diff --git a/android/src/main/cpp/JNIInjector.cpp b/android/src/main/cpp/JNIInjector.cpp
+index 0725f55ae2a690d1386ee95ebfcc927a9fc7f639..dd3d70df56cc16962e2d7c6e15c0b35c6226e0c9 100644
+--- a/android/src/main/cpp/JNIInjector.cpp
++++ b/android/src/main/cpp/JNIInjector.cpp
+@@ -8,6 +8,7 @@
+ #include "JavaScriptWeakObject.h"
+ #include "JavaScriptFunction.h"
+ #include "JavaScriptTypedArray.h"
++#include "NativeArrayBuffer.h"
+ #include "JavaReferencesCache.h"
+ #include "JavaCallback.h"
+ #include "JNIUtils.h"
+@@ -39,6 +40,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
+     expo::JavaScriptWeakObject::registerNatives();
+     expo::JavaScriptFunction::registerNatives();
+     expo::JavaScriptTypedArray::registerNatives();
++    expo::NativeArrayBuffer::registerNatives();
+     expo::JavaCallback::registerNatives();
+     expo::JNIUtils::registerNatives();
+ 
+diff --git a/android/src/main/cpp/JavaCallback.cpp b/android/src/main/cpp/JavaCallback.cpp
+index f12afe34d7f6bb0f6f5c80ea2817a8e6770c8f53..8228b9426461553350f70e4e1e1c83fc97f177e8 100644
+--- a/android/src/main/cpp/JavaCallback.cpp
++++ b/android/src/main/cpp/JavaCallback.cpp
+@@ -66,9 +66,11 @@ void JavaCallback::registerNatives() {
+                    makeNativeMethod("invokeNative", JavaCallback::invokeWritableArray),
+                    makeNativeMethod("invokeNative", JavaCallback::invokeWritableMap),
+                    makeNativeMethod("invokeNative", JavaCallback::invokeSharedObject),
++                   makeNativeMethod("invokeNative", JavaCallback::invokeJavaScriptArrayBuffer),
+                    makeNativeMethod("invokeNative", JavaCallback::invokeError),
+                    makeNativeMethod("invokeIntArray", JavaCallback::invokeIntArray),
+                    makeNativeMethod("invokeLongArray", JavaCallback::invokeLongArray),
++                    makeNativeMethod("invokeNative", JavaCallback::invokeNativeArrayBuffer),
+                    makeNativeMethod("invokeFloatArray", JavaCallback::invokeFloatArray),
+                    makeNativeMethod("invokeDoubleArray", JavaCallback::invokeDoubleArray),
+                  });
+@@ -199,6 +201,14 @@ void JavaCallback::invokeMap(jni::alias_ref<jni::JMap<jstring, jobject>> result)
+   >(jni::make_global(result));
+ }
+ 
++void JavaCallback::invokeJavaScriptArrayBuffer(jni::alias_ref<JavaScriptArrayBuffer::javaobject> result) {
++  invokeJSFunction(jni::make_global(result));
++}
++
++void JavaCallback::invokeNativeArrayBuffer(jni::alias_ref<NativeArrayBuffer::javaobject> result) {
++  invokeJSFunction(jni::make_global(result));
++}
++
+ void
+ JavaCallback::invokeWritableArray(jni::alias_ref<react::WritableNativeArray::javaobject> result) {
+   invokeJSFunction(result->cthis()->consume());
+diff --git a/android/src/main/cpp/JavaCallback.h b/android/src/main/cpp/JavaCallback.h
+index 08356763e782022558b09cb228d50e111c0722ea..1e70d9f4514ee4f576ff4899232a4c4a3534f374 100644
+--- a/android/src/main/cpp/JavaCallback.h
++++ b/android/src/main/cpp/JavaCallback.h
+@@ -4,6 +4,8 @@
+ 
+ #include "JNIDeallocator.h"
+ #include "JSharedObject.h"
++#include "JavaScriptArrayBuffer.h"
++#include "NativeArrayBuffer.h"
+ 
+ #include <jsi/jsi.h>
+ #include <fbjni/fbjni.h>
+@@ -83,6 +85,10 @@ private:
+ 
+   void invokeSharedObject(jni::alias_ref<JSharedObject::javaobject> result);
+ 
++  void invokeJavaScriptArrayBuffer(jni::alias_ref<JavaScriptArrayBuffer::javaobject> result);
++
++  void invokeNativeArrayBuffer(jni::alias_ref<NativeArrayBuffer::javaobject> result);
++
+   void invokeError(jni::alias_ref<jstring> code, jni::alias_ref<jstring> errorMessage);
+ 
+   void invokeIntArray(jni::alias_ref<jni::JArrayInt> result);
+diff --git a/android/src/main/cpp/JavaReferencesCache.cpp b/android/src/main/cpp/JavaReferencesCache.cpp
+index 3fa188d83fbd11f300b496bf3d31330fa071625b..68478f3c22db3c5d2f7c424c81c2c9f07ceaaebe 100644
+--- a/android/src/main/cpp/JavaReferencesCache.cpp
++++ b/android/src/main/cpp/JavaReferencesCache.cpp
+@@ -49,6 +49,8 @@ JCache::JCache(JNIEnv *env) {
+   jReadableNativeMap = REGISTER_CLASS("com/facebook/react/bridge/ReadableNativeMap");
+   jWritableNativeArray = REGISTER_CLASS("com/facebook/react/bridge/WritableNativeArray");
+   jWritableNativeMap = REGISTER_CLASS("com/facebook/react/bridge/WritableNativeMap");
++  jJavaScriptArrayBuffer = REGISTER_CLASS("expo/modules/kotlin/jni/JavaScriptArrayBuffer");
++  jNativeArrayBuffer = REGISTER_CLASS("expo/modules/kotlin/jni/NativeArrayBuffer");
+ 
+   jSharedObject = REGISTER_CLASS("expo/modules/kotlin/sharedobjects/SharedObject");
+   jJavaScriptModuleObject = REGISTER_CLASS("expo/modules/kotlin/jni/JavaScriptModuleObject");
+diff --git a/android/src/main/cpp/JavaReferencesCache.h b/android/src/main/cpp/JavaReferencesCache.h
+index 52e2e9d42baa1c5d3651f0543b609c7e49d3990f..327a40a32120e19f52079fa4118e975b5146ea9f 100644
+--- a/android/src/main/cpp/JavaReferencesCache.h
++++ b/android/src/main/cpp/JavaReferencesCache.h
+@@ -48,6 +48,8 @@ public:
+   jclass jJavaScriptObject;
+   jclass jJavaScriptValue;
+   jclass jJavaScriptTypedArray;
++  jclass jJavaScriptArrayBuffer;
++  jclass jNativeArrayBuffer;
+ 
+   jclass jReadableNativeArray;
+   jclass jReadableNativeMap;
+diff --git a/android/src/main/cpp/JavaScriptArrayBuffer.cpp b/android/src/main/cpp/JavaScriptArrayBuffer.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..195a126d85068b5fbd9fa4228266bf03646e4169
+--- /dev/null
++++ b/android/src/main/cpp/JavaScriptArrayBuffer.cpp
+@@ -0,0 +1,68 @@
++#include "JavaScriptArrayBuffer.h"
++
++#include "JavaScriptRuntime.h"
++#include "JSIContext.h"
++
++namespace expo {
++
++void JavaScriptArrayBuffer::registerNatives() {
++  registerHybrid({
++                   makeNativeMethod("size", JavaScriptArrayBuffer::size),
++                   makeNativeMethod("readByte", JavaScriptArrayBuffer::read<int8_t>),
++                   makeNativeMethod("read2Byte", JavaScriptArrayBuffer::read<int16_t>),
++                   makeNativeMethod("read4Byte", JavaScriptArrayBuffer::read<int32_t>),
++                   makeNativeMethod("read8Byte", JavaScriptArrayBuffer::read<int64_t>),
++                   makeNativeMethod("readFloat", JavaScriptArrayBuffer::read<float>),
++                   makeNativeMethod("readDouble", JavaScriptArrayBuffer::read<double>),
++                   makeNativeMethod("toDirectBuffer", JavaScriptArrayBuffer::toDirectBuffer),
++                 });
++}
++
++JavaScriptArrayBuffer::JavaScriptArrayBuffer(
++  std::weak_ptr<JavaScriptRuntime> runtime,
++  std::shared_ptr<jsi::ArrayBuffer> jsObject
++) : runtimeHolder(std::move(runtime)), arrayBuffer(std::move(jsObject)) {
++  runtimeHolder.ensureRuntimeIsValid();
++}
++
++JavaScriptArrayBuffer::JavaScriptArrayBuffer(
++  WeakRuntimeHolder runtime,
++  std::shared_ptr<jsi::ArrayBuffer> jsObject
++) : runtimeHolder(std::move(runtime)), arrayBuffer(std::move(jsObject)) {
++  runtimeHolder.ensureRuntimeIsValid();
++}
++
++jni::local_ref<JavaScriptArrayBuffer::javaobject> JavaScriptArrayBuffer::newInstance(
++  JSIContext *jsiContext,
++  std::weak_ptr<JavaScriptRuntime> runtime,
++  std::shared_ptr<jsi::ArrayBuffer> jsValue
++) {
++  auto value = JavaScriptArrayBuffer::newObjectCxxArgs(
++    std::move(runtime),
++    std::move(jsValue)
++  );
++  jsiContext->jniDeallocator->addReference(value);
++  return value;
++}
++
++int JavaScriptArrayBuffer::size() {
++  jsi::Runtime &jsRuntime = runtimeHolder.getJSRuntime();
++  return (int) arrayBuffer->size(jsRuntime);
++}
++
++uint8_t *JavaScriptArrayBuffer::data() {
++  jsi::Runtime &jsRuntime = runtimeHolder.getJSRuntime();
++  return arrayBuffer->data(jsRuntime);
++}
++
++jni::local_ref<jni::JByteBuffer> JavaScriptArrayBuffer::toDirectBuffer() {
++  auto buffer = jni::JByteBuffer::wrapBytes(data(), size());
++  buffer->order(jni::JByteOrder::nativeOrder());
++  return buffer;
++}
++
++std::shared_ptr<jsi::ArrayBuffer> JavaScriptArrayBuffer::jsiArrayBuffer() {
++  return this->arrayBuffer;
++}
++
++}
+diff --git a/android/src/main/cpp/JavaScriptArrayBuffer.h b/android/src/main/cpp/JavaScriptArrayBuffer.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..6e0f29789404e66b05abd7abdd4436db4a44b899
+--- /dev/null
++++ b/android/src/main/cpp/JavaScriptArrayBuffer.h
+@@ -0,0 +1,60 @@
++#pragma once
++
++#include "WeakRuntimeHolder.h"
++#include "JNIDeallocator.h"
++
++#include <fbjni/ByteBuffer.h>
++#include <fbjni/fbjni.h>
++#include <jsi/jsi.h>
++
++#include <memory>
++
++namespace expo {
++
++class JavaScriptRuntime;
++
++namespace jni = facebook::jni;
++namespace jsi = facebook::jsi;
++
++class JavaScriptArrayBuffer : public jni::HybridClass<JavaScriptArrayBuffer, Destructible> {
++public:
++  static auto constexpr
++    kJavaDescriptor = "Lexpo/modules/kotlin/jni/JavaScriptArrayBuffer;";
++  static auto constexpr TAG = "JavaScriptArrayBuffer";
++
++  static void registerNatives();
++
++  static jni::local_ref<JavaScriptArrayBuffer::javaobject> newInstance(
++    JSIContext *jSIContext,
++    std::weak_ptr<JavaScriptRuntime> runtime,
++    std::shared_ptr<jsi::ArrayBuffer> arrayBuffer
++  );
++
++  JavaScriptArrayBuffer(
++    std::weak_ptr<JavaScriptRuntime> runtime,
++    std::shared_ptr<jsi::ArrayBuffer> arrayBuffer
++  );
++
++  JavaScriptArrayBuffer(
++    WeakRuntimeHolder runtime,
++    std::shared_ptr<jsi::ArrayBuffer> arrayBuffer
++  );
++
++  [[nodiscard]] int size();
++
++  [[nodiscard]] uint8_t* data();
++
++  [[nodiscard]] jni::local_ref<jni::JByteBuffer> toDirectBuffer();
++
++  [[nodiscard]] std::shared_ptr<jsi::ArrayBuffer> jsiArrayBuffer();
++
++  template<class T>
++  T read(int position) {
++    return *reinterpret_cast<T *>(this->data() + position);
++  }
++
++private:
++  WeakRuntimeHolder runtimeHolder;
++  std::shared_ptr<jsi::ArrayBuffer> arrayBuffer;
++};
++} // namespace expo
+diff --git a/android/src/main/cpp/JavaScriptValue.cpp b/android/src/main/cpp/JavaScriptValue.cpp
+index 851e8ceb5515ceb2f1e27317f3e5b085dfce3e97..cf13845118fca6a06ef24336caf19ba1e761c291 100644
+--- a/android/src/main/cpp/JavaScriptValue.cpp
++++ b/android/src/main/cpp/JavaScriptValue.cpp
+@@ -5,6 +5,7 @@
+ #include "JavaScriptRuntime.h"
+ #include "JavaScriptObject.h"
+ #include "JavaScriptTypedArray.h"
++#include "JavaScriptArrayBuffer.h"
+ #include "JavaScriptFunction.h"
+ #include "TypedArray.h"
+ #include "Exceptions.h"
+diff --git a/android/src/main/cpp/JavaScriptValue.h b/android/src/main/cpp/JavaScriptValue.h
+index 9f900eaeec4549690196b399abfae1de18889385..d277adcedf51fd16f1c5b1c8ce210a77049e41f6 100644
+--- a/android/src/main/cpp/JavaScriptValue.h
++++ b/android/src/main/cpp/JavaScriptValue.h
+@@ -5,6 +5,7 @@
+ #include "JSIObjectWrapper.h"
+ #include "WeakRuntimeHolder.h"
+ #include "JavaScriptTypedArray.h"
++#include "JavaScriptArrayBuffer.h"
+ #include "JNIDeallocator.h"
+ 
+ #include <fbjni/fbjni.h>
+@@ -22,6 +23,8 @@ class JavaScriptObject;
+ 
+ class JavaScriptTypedArray;
+ 
++class JavaScriptArrayBuffer;
++
+ class JavaScriptFunction;
+ 
+ /**
+diff --git a/android/src/main/cpp/NativeArrayBuffer.cpp b/android/src/main/cpp/NativeArrayBuffer.cpp
+new file mode 100644
+index 0000000000000000000000000000000000000000..0d689205d00f797cf8d855f0158636e66d59c556
+--- /dev/null
++++ b/android/src/main/cpp/NativeArrayBuffer.cpp
+@@ -0,0 +1,77 @@
++#include "NativeArrayBuffer.h"
++
++#include "JavaScriptRuntime.h"
++#include "JSIContext.h"
++
++namespace expo {
++
++ByteBufferJSIWrapper::ByteBufferJSIWrapper(const jni::alias_ref<jni::JByteBuffer> &byteBuffer) : _byteBuffer(jni::make_global(byteBuffer)) {
++  _byteBuffer->order(jni::JByteOrder::nativeOrder());
++}
++
++ByteBufferJSIWrapper::~ByteBufferJSIWrapper() {
++  // Destruction can happen on JS thread
++  jni::ThreadScope::WithClassLoader([&] { _byteBuffer.reset(); });
++}
++
++uint8_t *ByteBufferJSIWrapper::data() {
++  return _byteBuffer->getDirectBytes();
++}
++
++size_t ByteBufferJSIWrapper::size() const {
++  return _byteBuffer->getDirectSize();
++}
++
++const jni::global_ref<jni::JByteBuffer> &ByteBufferJSIWrapper::getBuffer() const {
++  return this->_byteBuffer;
++}
++
++void NativeArrayBuffer::registerNatives() {
++  registerHybrid({
++                   makeNativeMethod("initHybrid", NativeArrayBuffer::initHybrid),
++                   makeNativeMethod("size", NativeArrayBuffer::size),
++                   makeNativeMethod("readByte", NativeArrayBuffer::read<int8_t>),
++                   makeNativeMethod("read2Byte", NativeArrayBuffer::read<int16_t>),
++                   makeNativeMethod("read4Byte", NativeArrayBuffer::read<int32_t>),
++                   makeNativeMethod("read8Byte", NativeArrayBuffer::read<int64_t>),
++                   makeNativeMethod("readFloat", NativeArrayBuffer::read<float>),
++                   makeNativeMethod("readDouble", NativeArrayBuffer::read<double>),
++                   makeNativeMethod("toDirectBuffer", NativeArrayBuffer::toDirectBuffer),
++                 });
++}
++
++jni::local_ref<NativeArrayBuffer::jhybriddata>
++NativeArrayBuffer::initHybrid(jni::alias_ref<JavaPart::javaobject>,
++                              jni::alias_ref<jni::JByteBuffer> byteBuffer) {
++  return makeCxxInstance(byteBuffer);
++}
++
++jni::local_ref<NativeArrayBuffer::javaobject>
++NativeArrayBuffer::newInstance(JSIContext *jsiContext, jsi::Runtime &runtime,
++                               jsi::ArrayBuffer &arrayBuffer) {
++  size_t size = arrayBuffer.size(runtime);
++  auto byteBuffer = jni::JByteBuffer::allocateDirect(size);
++  byteBuffer->order(jni::JByteOrder::nativeOrder());
++  memcpy(byteBuffer->getDirectAddress(), arrayBuffer.data(runtime), size);
++
++  auto value = NativeArrayBuffer::newObjectCxxArgs(byteBuffer);
++  jsiContext->jniDeallocator->addReference(value);
++  return value;
++}
++
++NativeArrayBuffer::NativeArrayBuffer(const jni::alias_ref<jni::JByteBuffer> &byteBuffer)
++  : buffer(std::make_shared<ByteBufferJSIWrapper>(byteBuffer)) { }
++
++int NativeArrayBuffer::size() {
++  return (int) buffer->size();
++}
++
++std::shared_ptr<ByteBufferJSIWrapper> NativeArrayBuffer::jsiMutableBuffer() {
++  return this->buffer;
++}
++
++jni::local_ref<jni::JByteBuffer> NativeArrayBuffer::toDirectBuffer() {
++  return jni::make_local(buffer->getBuffer());
++}
++
++}
+diff --git a/android/src/main/cpp/NativeArrayBuffer.h b/android/src/main/cpp/NativeArrayBuffer.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..73f7b019aad4611bcc3c07cdc0d5ccc57b453625
+--- /dev/null
++++ b/android/src/main/cpp/NativeArrayBuffer.h
+@@ -0,0 +1,75 @@
++#pragma once
++
++#include "JNIDeallocator.h"
++#include "JSIContext.h"
++
++#include <fbjni/ByteBuffer.h>
++#include <fbjni/fbjni.h>
++#include <jsi/jsi.h>
++
++#include <memory>
++
++namespace expo {
++
++class JavaScriptRuntime;
++
++namespace jni = facebook::jni;
++namespace jsi = facebook::jsi;
++
++/**
++ * Represents JNI direct ByteBuffer instance, that can be passed
++ * to JSI and then managed by JS.
++ */
++class ByteBufferJSIWrapper: public jsi::MutableBuffer {
++public:
++  explicit ByteBufferJSIWrapper(const jni::alias_ref<jni::JByteBuffer>& byteBuffer);
++
++  ~ByteBufferJSIWrapper() override;
++
++  [[nodiscard]] uint8_t* data() override;
++
++  [[nodiscard]] size_t size() const override;
++
++  [[nodiscard]] const jni::global_ref<jni::JByteBuffer>& getBuffer() const;
++
++private:
++  jni::global_ref<jni::JByteBuffer> _byteBuffer;
++};
++
++class NativeArrayBuffer : public jni::HybridClass<NativeArrayBuffer, Destructible> {
++public:
++  static auto constexpr
++    kJavaDescriptor = "Lexpo/modules/kotlin/jni/NativeArrayBuffer;";
++  static auto constexpr TAG = "NativeArrayBuffer";
++
++  static void registerNatives();
++
++  static jni::local_ref<NativeArrayBuffer::jhybriddata> initHybrid(
++    jni::alias_ref<jhybridobject>,
++    jni::alias_ref<jni::JByteBuffer> byteBuffer
++  );
++
++  static jni::local_ref<NativeArrayBuffer::javaobject> newInstance(
++    JSIContext *jsiContext,
++    jsi::Runtime& runtime,
++    jsi::ArrayBuffer& arrayBuffer
++  );
++
++  explicit NativeArrayBuffer(const jni::alias_ref<jni::JByteBuffer>& byteBuffer);
++
++  [[nodiscard]] int size();
++
++  [[nodiscard]] std::shared_ptr<ByteBufferJSIWrapper> jsiMutableBuffer();
++
++  [[nodiscard]] jni::local_ref<jni::JByteBuffer> toDirectBuffer();
++
++  template<class T>
++  T read(int position) {
++    return *reinterpret_cast<T *>(buffer->data() + position);
++  }
++
++private:
++  std::shared_ptr<ByteBufferJSIWrapper> buffer;
++};
++
++} // namespace expo
+diff --git a/android/src/main/cpp/types/CppType.h b/android/src/main/cpp/types/CppType.h
+index 6feafa43239508ab6996e23bd9aa7c766fa708f4..9cfb52f3dabefdd8008083c91abe77d82cff189e 100644
+--- a/android/src/main/cpp/types/CppType.h
++++ b/android/src/main/cpp/types/CppType.h
+@@ -31,5 +31,7 @@ enum CppType {
+   ANY = 1 << 19,
+   NULLABLE = 1 << 20,
+   VALUE_OR_UNDEFINED = 1 << 21,
++  JS_ARRAY_BUFFER = 1 << 22,
++  NATIVE_ARRAY_BUFFER = 1 << 23,
+ };
+ } // namespace expo
+diff --git a/android/src/main/cpp/types/FrontendConverter.cpp b/android/src/main/cpp/types/FrontendConverter.cpp
+index 07647a40e2194fa065e51121676f8522e5b19e99..bb20f8e7f3d96469a97b4bc6c0b85f74883e38e3 100644
+--- a/android/src/main/cpp/types/FrontendConverter.cpp
++++ b/android/src/main/cpp/types/FrontendConverter.cpp
+@@ -9,6 +9,8 @@
+ #include "../JSIContext.h"
+ #include "../JavaScriptObject.h"
+ #include "../JavaScriptValue.h"
++#include "../JavaScriptArrayBuffer.h"
++#include "../NativeArrayBuffer.h"
+ #include "../JavaScriptFunction.h"
+ #include "../javaclasses/Collections.h"
+ 
+@@ -199,6 +201,32 @@ bool JavaScriptValueFrontendConverter::canConvert(jsi::Runtime &rt, const jsi::V
+   return true;
+ }
+ 
++jobject NativeArrayBufferFrontendConverter::convert(
++  jsi::Runtime &rt,
++  JNIEnv *env,
++  const jsi::Value &value
++) const {
++  JSIContext *jsiContext = getJSIContext(rt);
++  auto arrayBuffer = value.asObject(rt).getArrayBuffer(rt);
++  return NativeArrayBuffer::newInstance(
++    jsiContext,
++    rt,
++    arrayBuffer
++  ).release();
++}
++
++bool NativeArrayBufferFrontendConverter::canConvert(
++  jsi::Runtime &rt,
++  const jsi::Value &value
++) const {
++  if (value.isObject()) {
++    auto object = value.getObject(rt);
++    return object.isArrayBuffer(rt);
++  }
++  return false;
++}
++
++
+ jobject JavaScriptObjectFrontendConverter::convert(
+   jsi::Runtime &rt,
+   JNIEnv *env,
+diff --git a/android/src/main/cpp/types/FrontendConverter.h b/android/src/main/cpp/types/FrontendConverter.h
+index 5d67cb9c69e5496e705b7d69531c937ba6bcc144..999124ca5d593cd2548dd2c42a52a8c2ee07ff45 100644
+--- a/android/src/main/cpp/types/FrontendConverter.h
++++ b/android/src/main/cpp/types/FrontendConverter.h
+@@ -179,6 +179,17 @@ public:
+   bool canConvert(jsi::Runtime &rt, const jsi::Value &value) const override;
+ };
+ 
++class NativeArrayBufferFrontendConverter : public FrontendConverter {
++public:
++  jobject convert(
++    jsi::Runtime &rt,
++    JNIEnv *env,
++    const jsi::Value &value
++  ) const override;
++
++  bool canConvert(jsi::Runtime &rt, const jsi::Value &value) const override;
++};
++
+ /**
+  * Converter from any js value to [expo.modules.kotlin.jni.JavaScriptValue].
+  */
+diff --git a/android/src/main/cpp/types/FrontendConverterProvider.cpp b/android/src/main/cpp/types/FrontendConverterProvider.cpp
+index e7c202fbf3b6c8ec25bbb955bb31043d1646f027..00660dd39d1d7f73aa1a5fd5b740d3af0833ee0d 100644
+--- a/android/src/main/cpp/types/FrontendConverterProvider.cpp
++++ b/android/src/main/cpp/types/FrontendConverterProvider.cpp
+@@ -26,6 +26,7 @@ void FrontendConverterProvider::createConverters() {
+   RegisterConverter(CppType::READABLE_ARRAY, ReadableNativeArrayFrontendConverter);
+   RegisterConverter(CppType::VIEW_TAG, ViewTagFrontendConverter);
+   RegisterConverter(CppType::SHARED_OBJECT_ID, SharedObjectIdConverter);
++  RegisterConverter(CppType::NATIVE_ARRAY_BUFFER, NativeArrayBufferFrontendConverter);
+   RegisterConverter(CppType::ANY, AnyFrontendConvert);
+ #undef RegisterConverter
+ 
+diff --git a/android/src/main/cpp/types/JNIToJSIConverter.cpp b/android/src/main/cpp/types/JNIToJSIConverter.cpp
+index e829ee198191a67bd6c3bd721f0e00537d510c89..b6e85f161ae61702064f599707a30444813b1bd6 100644
+--- a/android/src/main/cpp/types/JNIToJSIConverter.cpp
++++ b/android/src/main/cpp/types/JNIToJSIConverter.cpp
+@@ -71,6 +71,8 @@ jsi::Value convert(
+   CAST_AND_RETURN(JavaScriptModuleObject::javaobject, cache.jJavaScriptModuleObject)
+   CAST_AND_RETURN(JSharedObject::javaobject, cache.jSharedObject)
+   CAST_AND_RETURN(JavaScriptTypedArray::javaobject, cache.jJavaScriptTypedArray)
++  CAST_AND_RETURN(JavaScriptArrayBuffer::javaobject, cache.jJavaScriptArrayBuffer)
++  CAST_AND_RETURN(NativeArrayBuffer::javaobject, cache.jNativeArrayBuffer)
+ 
+   CAST_AND_RETURN(jni::JMap<jstring COMMA jobject>, cache.jMap)
+   CAST_AND_RETURN(jni::JCollection<jobject>, cache.jCollection)
+diff --git a/android/src/main/cpp/types/JNIToJSIConverter.h b/android/src/main/cpp/types/JNIToJSIConverter.h
+index f6ebb13e76965e7ae7535be8eba8c12292f1ea3f..9b540fad2c4f6795699119d8969f7708cca1988c 100644
+--- a/android/src/main/cpp/types/JNIToJSIConverter.h
++++ b/android/src/main/cpp/types/JNIToJSIConverter.h
+@@ -7,6 +7,8 @@
+ #include "../JNIUtils.h"
+ #include "ObjectDeallocator.h"
+ #include "../javaclasses/Collections.h"
++#include "../JavaScriptArrayBuffer.h"
++#include "../NativeArrayBuffer.h"
+ 
+ #include <fbjni/fbjni.h>
+ #include <jsi/jsi.h>
+@@ -317,6 +319,38 @@ public:
+   }
+ };
+ 
++template<>
++class JNIToJSIConverter<JavaScriptArrayBuffer *> {
++public:
++  typedef SimpleConverter converterType;
++
++  static inline jsi::Value convert(
++    JNIEnv *env,
++    jsi::Runtime &rt,
++    JavaScriptArrayBuffer *value
++  ) {
++    auto jsArrayBuffer = value->jsiArrayBuffer();
++    return {rt, *jsArrayBuffer};
++  }
++};
++
++template<>
++class JNIToJSIConverter<NativeArrayBuffer *> {
++public:
++  typedef SimpleConverter converterType;
++
++  static inline jsi::Value convert(
++    JNIEnv *env,
++    jsi::Runtime &rt,
++    NativeArrayBuffer *value
++  ) {
++    auto buffer = value->jsiMutableBuffer();
++    jsi::ArrayBuffer arrayBuffer(rt, buffer);
++    return {rt, arrayBuffer};
++  }
++};
++
++
+ template<>
+ class JNIToJSIConverter<react::WritableNativeArray *> {
+ public:
+diff --git a/android/src/main/java/expo/modules/kotlin/jni/ArrayBuffer.kt b/android/src/main/java/expo/modules/kotlin/jni/ArrayBuffer.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..f3dd4c62d1fc7b3aa3f5ea900a2fe5f627a1e7f9
+--- /dev/null
++++ b/android/src/main/java/expo/modules/kotlin/jni/ArrayBuffer.kt
+@@ -0,0 +1,28 @@
++package expo.modules.kotlin.jni
++
++import java.nio.ByteBuffer
++
++/**
++ * Abstracts common operations that can be done on
++ * [NativeArrayBuffer] and [JavaScriptArrayBuffer].
++ */
++interface ArrayBuffer {
++  fun size(): Int
++
++  fun readByte(position: Int): Byte
++  fun read2Byte(position: Int): Short
++  fun read4Byte(position: Int): Int
++  fun read8Byte(position: Int): Long
++  fun readFloat(position: Int): Float
++  fun readDouble(position: Int): Double
++
++  /**
++   * Returns a direct [ByteBuffer] that wraps this ArrayBuffer's underlying data.
++   */
++  fun toDirectBuffer(): ByteBuffer
++
++  /**
++   * Creates a native-owned copy of this ArrayBuffer.
++   */
++  fun copy(): NativeArrayBuffer = NativeArrayBuffer.copyOf(this)
++}
+diff --git a/android/src/main/java/expo/modules/kotlin/jni/CppType.kt b/android/src/main/java/expo/modules/kotlin/jni/CppType.kt
+index dcb7273318b9be6e96e1b588416097d5dc387776..e86eed4f05093053435457bd904aa7e5c2d13f86 100644
+--- a/android/src/main/java/expo/modules/kotlin/jni/CppType.kt
++++ b/android/src/main/java/expo/modules/kotlin/jni/CppType.kt
+@@ -36,5 +36,7 @@ enum class CppType(val clazz: KClass<*>, val value: Int = nextValue()) {
+   JS_FUNCTION(JavaScriptFunction::class),
+   ANY(Any::class),
+   NULLABLE(Any::class),
+-  VALUE_OR_UNDEFINED(ValueOrUndefined::class)
++  VALUE_OR_UNDEFINED(ValueOrUndefined::class),
++  JS_ARRAY_BUFFER(JavaScriptArrayBuffer::class),
++  NATIVE_ARRAY_BUFFER(NativeArrayBuffer::class)
+ }
+diff --git a/android/src/main/java/expo/modules/kotlin/jni/JavaCallback.kt b/android/src/main/java/expo/modules/kotlin/jni/JavaCallback.kt
+index 7d15bd51acac79893a6a4323e6d4a87f9ac42346..165c238254cfd5d3d0b9b3d371510a81ddbd5fbc 100644
+--- a/android/src/main/java/expo/modules/kotlin/jni/JavaCallback.kt
++++ b/android/src/main/java/expo/modules/kotlin/jni/JavaCallback.kt
+@@ -33,6 +33,8 @@ class JavaCallback @DoNotStrip internal constructor(@DoNotStrip private val mHyb
+       is WritableNativeArray -> invokeNative(result)
+       is WritableNativeMap -> invokeNative(result)
+       is SharedObject -> invokeNative(result)
++      is JavaScriptArrayBuffer -> invokeNative(result)
++      is NativeArrayBuffer -> invokeNative(result)
+       is IntArray -> invokeIntArray(result)
+       is LongArray -> invokeLongArray(result)
+       is FloatArray -> invokeFloatArray(result)
+@@ -88,6 +90,8 @@ class JavaCallback @DoNotStrip internal constructor(@DoNotStrip private val mHyb
+   private external fun invokeNative(result: WritableNativeArray)
+   private external fun invokeNative(result: WritableNativeMap)
+   private external fun invokeNative(result: SharedObject)
++  private external fun invokeNative(result: JavaScriptArrayBuffer)
++  private external fun invokeNative(result: NativeArrayBuffer)
+   private external fun invokeNative(code: String, errorMessage: String)
+ 
+   private external fun invokeIntArray(result: IntArray)
+diff --git a/android/src/main/java/expo/modules/kotlin/jni/JavaScriptArrayBuffer.kt b/android/src/main/java/expo/modules/kotlin/jni/JavaScriptArrayBuffer.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..a52c5c30ee2bd1fe9394bb1fefbede170a2248dd
+--- /dev/null
++++ b/android/src/main/java/expo/modules/kotlin/jni/JavaScriptArrayBuffer.kt
+@@ -0,0 +1,35 @@
++package expo.modules.kotlin.jni
++
++import com.facebook.jni.HybridData
++import expo.modules.core.interfaces.DoNotStrip
++import java.nio.ByteBuffer
++
++/**
++ * A Kotlin representation of jsi::Value.
++ * Should be used only on the runtime thread.
++ */
++@Suppress("KotlinJniMissingFunction")
++@DoNotStrip
++class JavaScriptArrayBuffer @DoNotStrip private constructor(@DoNotStrip private val mHybridData: HybridData) : Destructible, ArrayBuffer {
++  fun isValid() = mHybridData.isValid
++
++  external override fun size(): Int
++
++  external override fun readByte(position: Int): Byte
++  external override fun read2Byte(position: Int): Short
++  external override fun read4Byte(position: Int): Int
++  external override fun read8Byte(position: Int): Long
++  external override fun readFloat(position: Int): Float
++  external override fun readDouble(position: Int): Double
++
++  external override fun toDirectBuffer(): ByteBuffer
++
++  @Throws(Throwable::class)
++  protected fun finalize() {
++    deallocate()
++  }
++
++  override fun deallocate() {
++    mHybridData.resetNative()
++  }
++}
+diff --git a/android/src/main/java/expo/modules/kotlin/jni/NativeArrayBuffer.kt b/android/src/main/java/expo/modules/kotlin/jni/NativeArrayBuffer.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..28b78a867ffbad0ec2a0d0f6f064742e86a04deb
+--- /dev/null
++++ b/android/src/main/java/expo/modules/kotlin/jni/NativeArrayBuffer.kt
+@@ -0,0 +1,90 @@
++package expo.modules.kotlin.jni
++
++import com.facebook.jni.HybridData
++import expo.modules.core.interfaces.DoNotStrip
++import expo.modules.kotlin.exception.Exceptions
++import java.nio.ByteBuffer
++
++/**
++ * A Kotlin representation of native-owned ArrayBuffer.
++ * Can be created on any thread and safely returned to JavaScript.
++ */
++@Suppress("KotlinJniMissingFunction")
++@DoNotStrip
++class NativeArrayBuffer : Destructible, ArrayBuffer {
++  @DoNotStrip private val mHybridData: HybridData
++
++  @DoNotStrip
++  @Suppress("unused")
++  private constructor(hybridData: HybridData) {
++    mHybridData = hybridData
++  }
++
++  constructor(byteBuffer: ByteBuffer) {
++    if (!byteBuffer.isDirect) {
++      throw Exceptions.IllegalArgument("ArrayBuffers can only be created from direct ByteBuffers")
++    }
++    mHybridData = initHybrid(byteBuffer)
++  }
++
++  private external fun initHybrid(buffer: ByteBuffer): HybridData
++
++  fun isValid() = mHybridData.isValid
++
++  external override fun size(): Int
++
++  external override fun readByte(position: Int): Byte
++  external override fun read2Byte(position: Int): Short
++  external override fun read4Byte(position: Int): Int
++  external override fun read8Byte(position: Int): Long
++  external override fun readFloat(position: Int): Float
++  external override fun readDouble(position: Int): Double
++
++  external override fun toDirectBuffer(): ByteBuffer
++
++  @Throws(Throwable::class)
++  protected fun finalize() {
++    deallocate()
++  }
++
++  override fun deallocate() {
++    mHybridData.resetNative()
++  }
++
++  companion object {
++    /**
++     * Allocate a new [NativeArrayBuffer] with the given [size].
++     */
++    fun allocate(size: Int): NativeArrayBuffer {
++      val buffer = ByteBuffer.allocateDirect(size)
++      return NativeArrayBuffer(buffer)
++    }
++
++    /**
++     * Wrap the given [ByteBuffer] in a new **owning** `ArrayBuffer`.
++     * The buffer must be direct, otherwise the function throws.
++     * Use [NativeArrayBuffer.copyOf] for non-direct buffers.
++     */
++    fun wrap(byteBuffer: ByteBuffer): NativeArrayBuffer =
++      NativeArrayBuffer(byteBuffer.apply { rewind() })
++
++    /**
++     * Copy given [ArrayBuffer] into a new native-owned `ArrayBuffer`.
++     */
++    fun copyOf(other: ArrayBuffer): NativeArrayBuffer =
++      copyOf(other.toDirectBuffer())
++
++    fun copyOf(byteBuffer: ByteBuffer): NativeArrayBuffer {
++      val size = byteBuffer.run {
++        rewind()
++        remaining()
++      }
++      val newBuffer = ByteBuffer.allocateDirect(size).apply {
++        put(byteBuffer)
++        rewind()
++      }
++      byteBuffer.rewind()
++      return NativeArrayBuffer(newBuffer)
++    }
++  }
++}
+diff --git a/android/src/main/java/expo/modules/kotlin/types/TypeConverterProvider.kt b/android/src/main/java/expo/modules/kotlin/types/TypeConverterProvider.kt
+index 8d2dd4d2e1f3c59d114b71b377b2347984629369..09f8b6b2b2c9d50ba85423162fea77bbe68c735f 100644
+--- a/android/src/main/java/expo/modules/kotlin/types/TypeConverterProvider.kt
++++ b/android/src/main/java/expo/modules/kotlin/types/TypeConverterProvider.kt
+@@ -15,6 +15,7 @@ import expo.modules.kotlin.jni.ExpectedType
+ import expo.modules.kotlin.jni.JavaScriptFunction
+ import expo.modules.kotlin.jni.JavaScriptObject
+ import expo.modules.kotlin.jni.JavaScriptValue
++import expo.modules.kotlin.jni.JavaScriptArrayBuffer
+ import expo.modules.kotlin.records.Record
+ import expo.modules.kotlin.records.RecordTypeConverter
+ import expo.modules.kotlin.sharedobjects.SharedObject
+@@ -39,6 +40,7 @@ import expo.modules.kotlin.types.net.JavaURITypeConverter
+ import expo.modules.kotlin.types.net.URLTypConverter
+ import expo.modules.kotlin.types.net.UriTypeConverter
+ import expo.modules.kotlin.views.ViewTypeConverter
++import expo.modules.kotlin.jni.NativeArrayBuffer
+ import java.io.File
+ import java.net.URI
+ import java.net.URL
+@@ -234,6 +236,12 @@ object TypeConverterProviderImpl : TypeConverterProvider {
+       JavaScriptObject::class to createTrivialTypeConverter(
+         ExpectedType(CppType.JS_OBJECT)
+       ),
++      JavaScriptArrayBuffer::class to createTrivialTypeConverter(
++        ExpectedType(CppType.JS_ARRAY_BUFFER)
++      ),
++      NativeArrayBuffer::class to createTrivialTypeConverter(
++        ExpectedType(CppType.NATIVE_ARRAY_BUFFER)
++      ),
+ 
+       Int8Array::class to Int8ArrayTypeConverter(),
+       Int16Array::class to Int16ArrayTypeConverter(),
 diff --git a/common/cpp/MemoryBuffer.cpp b/common/cpp/MemoryBuffer.cpp
 new file mode 100644
 index 0000000000000000000000000000000000000000..c0b5d992a50b8ae60f88b4c868aac71d91054c2d

@@ -118,7 +118,7 @@ export const benchmarks: Benchmark[] = [
     prefetch: expoFetch,
     measurePrefetchTime,
     run: async (response: Response): Promise<void> => {
-      // @ts-expect-error
+      // @ts-expect-error It's defined in native module (see patches/) but not in TS
       const _result = await response.arrayBuffer2();
     },
   }),
