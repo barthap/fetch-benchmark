@@ -1,4 +1,5 @@
 import { handleChunked } from "./endpoints/chunked";
+import { handleSSE } from "./endpoints/sse";
 import { join } from "path";
 
 const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures");
@@ -11,6 +12,10 @@ const server = Bun.serve({
 
     if (url.pathname === "/chunked") {
       return handleChunked(url);
+    }
+
+    if (url.pathname === "/sse") {
+      return handleSSE();
     }
 
     // Static file serving from fixtures/
