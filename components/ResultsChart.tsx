@@ -3,8 +3,10 @@ import { Card, Text } from "react-native-paper";
 import type { Benchmark, BenchmarkResult } from "../benchmarks/types";
 
 type ResultsChartProps = {
-  benchmarks: Benchmark[];
+  benchmarks: { id: string; name: string; category: string }[];
   results: Record<string, BenchmarkResult>;
+  title?: string;
+  metricKey?: "durationMs" | "timeToFirstChunkMs" | "throughputMbPerCc";
 };
 
 const PALETTE = [
@@ -20,15 +22,16 @@ const PALETTE = [
   "#316395",
 ];
 
-export const ResultsChart = ({ benchmarks, results }: ResultsChartProps) => {
+export const ResultsChart = ({ benchmarks, results, title, metricKey = "durationMs" }: ResultsChartProps) => {
   const completedResults = Object.entries(results)
     .map(([id, result]) => {
       const benchmark = benchmarks.find((b) => b.id === id);
+      const value = (result as Record<string, unknown>)[metricKey] as number | undefined;
       return {
         id,
         name: benchmark?.name || "Unknown",
         category: benchmark?.category || "Unknown",
-        duration: result.durationMs,
+        duration: value ?? 0,
       };
     })
     .filter((r) => r.duration > 0)
@@ -42,7 +45,7 @@ export const ResultsChart = ({ benchmarks, results }: ResultsChartProps) => {
 
   return (
     <Card style={styles.card}>
-      <Card.Title title="Benchmark Results (50MB JSON)" />
+      <Card.Title title={title ?? "Benchmark Results (50MB JSON)"} />
       <Card.Content>
         <View style={styles.chart}>
           {completedResults.map((result, index) => {
@@ -66,7 +69,11 @@ export const ResultsChart = ({ benchmarks, results }: ResultsChartProps) => {
                       ]}
                     />
                   </View>
-                  <Text style={styles.barValue}>{result.duration.toFixed(0)} ms</Text>
+                  <Text style={styles.barValue}>
+                    {metricKey === "throughputMbPerCc"
+                      ? `${result.duration.toFixed(1)} MB/s`
+                      : `${result.duration.toFixed(0)} ms`}
+                  </Text>
                 </View>
               </View>
             );
