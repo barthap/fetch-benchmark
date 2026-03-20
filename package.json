@@ -11,7 +11,7 @@
     "check": "biome check .",
     "format": "biome format --write .",
     "lint": "biome lint .",
-    "serve": "cd fixtures && python3 -m http.server",
+    "serve": "bun run server/index.ts",
     "edit:android": "open -a '/Applications/Android Studio.app' ./android"
   },
   "dependencies": {
