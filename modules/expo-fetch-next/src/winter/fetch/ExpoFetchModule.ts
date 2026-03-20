@@ -1,3 +1,3 @@
-import { requireNativeModule } from "expo-modules-core";
+import { requireNativeModule } from 'expo-modules-core';
 
-export const ExpoFetchModule = requireNativeModule("ExpoFetchNextModule");
+export const ExpoFetchModule = requireNativeModule('ExpoFetchNextModule');

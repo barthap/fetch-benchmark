@@ -63,28 +63,16 @@ When you want to pull in new changes from your local expo checkout:
 ./modules/sync.sh
 ```
 
-### sync.sh
+### How it works
 
-```bash
-#!/bin/bash
-set -e
-
-EXPO_DIR="${HOME}/dev/expo/packages/expo"
-MODULE_DIR="$(dirname "$0")/expo-fetch-next"
-
-echo "Syncing from ${EXPO_DIR}..."
-rsync -a --delete "${EXPO_DIR}/" "${MODULE_DIR}/"
-
-echo "Applying rename patches..."
-cd "$(dirname "$0")"
-patch -p0 < renames.patch
-
-echo "Done! Rebuild the app to pick up changes."
-```
-
-Make it executable: `chmod +x modules/sync.sh`
-
-This uses `rsync --delete` to mirror the upstream expo package (adding new files, updating changed ones, removing deleted ones), then re-applies the rename patch on top.
+1. Rsyncs only the three source directories that matter:
+   - `ios/Fetch/` → `ios/Fetch/`
+   - `android/src/.../fetch/` → `android/src/.../fetch/next/` (package move)
+   - `src/winter/fetch/` → `src/winter/fetch/`
+2. Applies deterministic sed renames + file renames:
+   - `ExpoFetchModule` → `ExpoFetchNextModule` (class, file, Name())
+   - `package expo.modules.fetch` → `package expo.modules.fetch.next` (Android)
+   - `"ExpoFetchModule"` → `"ExpoFetchNextModule"` (TS native module ref)
 
 ## Usage in Benchmarks
 
