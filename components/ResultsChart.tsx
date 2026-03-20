@@ -26,7 +26,7 @@ export const ResultsChart = ({ benchmarks, results, title, metricKey = "duration
   const completedResults = Object.entries(results)
     .map(([id, result]) => {
       const benchmark = benchmarks.find((b) => b.id === id);
-      const value = (result as Record<string, unknown>)[metricKey] as number | undefined;
+      const value = (result as unknown as Record<string, unknown>)[metricKey] as number | undefined;
       return {
         id,
         name: benchmark?.name || "Unknown",
