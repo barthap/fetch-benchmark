@@ -33,6 +33,9 @@ export async function drainStream(
 ): Promise<StreamingBenchmarkResult> {
   const fetchStart = performance.now();
   const response = await fetchFn(url);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
   const reader = response.body!.getReader();
 
   let firstChunkTime: number | undefined;

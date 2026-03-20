@@ -32,6 +32,9 @@ export function handleChunked(url: URL): Response {
         if (throttleBytesPerSec) {
           const delayMs = (toSend.byteLength / throttleBytesPerSec) * 1000;
           await new Promise((r) => setTimeout(r, delayMs));
+        } else {
+          // Yield to event loop so Bun flushes chunks instead of batching
+          await new Promise((r) => setTimeout(r, 0));
         }
       }
       controller.close();
@@ -41,7 +44,6 @@ export function handleChunked(url: URL): Response {
   return new Response(stream, {
     headers: {
       "Content-Type": "application/octet-stream",
-      "Content-Length": String(totalBytes),
     },
   });
 }

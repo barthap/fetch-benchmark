@@ -44,6 +44,9 @@ const streamingBenchmarkDefs: StreamingBenchmarkDef[] = [
     run: async (fetchFn, url): Promise<StreamingBenchmarkResult> => {
       const fetchStart = performance.now();
       const response = await fetchFn(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
 
@@ -115,6 +118,9 @@ const streamingBenchmarkDefs: StreamingBenchmarkDef[] = [
 
       async function drainOne(): Promise<{ bytes: number; chunks: number }> {
         const response = await fetchFn(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         const reader = response.body!.getReader();
         let bytes = 0;
         let chunks = 0;
