@@ -16,7 +16,7 @@ type ImplKey = "before" | "after";
 // Try to import the "after" module; fall back to undefined if not installed
 let expoFetchNext: typeof expoFetch | undefined;
 try {
-  expoFetchNext = require("expo-fetch-next").fetch;
+  expoFetchNext = require("expo-fetch-next/fetch").fetch;
 } catch {
   // Module not installed yet — "After" option will be disabled
 }
