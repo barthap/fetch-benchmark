@@ -24,12 +24,6 @@ Some random results are available in the [`screenshots`](./screenshots/) directo
 
 <img width="300" src="./screenshots/Simulator Screenshot - iPhone 17 Pro - 2025-12-21 at 02.08.58.png" />
 
-## Patched files
-
-In the [`patches`](./patches/) there are two patches:
-
-- `expo` - added `arrayBuffer2()` to compare memory copying cost
-
 ---
 
 _This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app). App UI was vibe-coded._
