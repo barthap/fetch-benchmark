@@ -3,7 +3,9 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "expo-fetch-next": ["./modules/expo-fetch-next"],
+      "expo-fetch-next/*": ["./modules/expo-fetch-next/*"]
     },
     "noUnusedLocals": false
   },

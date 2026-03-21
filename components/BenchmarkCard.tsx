@@ -1,6 +1,7 @@
 import { StyleSheet, View } from "react-native";
 import { ActivityIndicator, Button, Card, Checkbox, Text, useTheme } from "react-native-paper";
 import type { Benchmark, BenchmarkResult, BenchmarkStatus } from "../benchmarks/types";
+import type { StreamingBenchmarkResult } from "../benchmarks/streaming-types";
 import { formatBytes } from "../benchmarks/utils";
 
 interface Props {
@@ -69,6 +70,30 @@ export function BenchmarkCard({ benchmark, status, result, onRun, isSelected, on
                 </Text>
               </View>
             )}
+            {(result as StreamingBenchmarkResult).timeToFirstChunkMs !== undefined && (
+              <View style={styles.metric}>
+                <Text variant="labelSmall">TTFC</Text>
+                <Text variant="bodyLarge" style={{ fontWeight: "bold" }}>
+                  {(result as StreamingBenchmarkResult).timeToFirstChunkMs.toFixed(1)} ms
+                </Text>
+              </View>
+            )}
+            {(result as StreamingBenchmarkResult).chunkCount !== undefined && (
+              <View style={styles.metric}>
+                <Text variant="labelSmall">Chunks</Text>
+                <Text variant="bodyLarge" style={{ fontWeight: "bold" }}>
+                  {(result as StreamingBenchmarkResult).chunkCount}
+                </Text>
+              </View>
+            )}
+            {(result as StreamingBenchmarkResult).droppedFrames !== undefined && (
+              <View style={styles.metric}>
+                <Text variant="labelSmall">Drops</Text>
+                <Text variant="bodyLarge" style={{ fontWeight: "bold" }}>
+                  {(result as StreamingBenchmarkResult).droppedFrames}
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </Card.Content>
@@ -97,6 +122,7 @@ const styles = StyleSheet.create({
   },
   results: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     marginTop: 12,
     backgroundColor: "#f0f0f005", // subtle bg

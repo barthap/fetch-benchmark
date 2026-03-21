@@ -1,0 +1,41 @@
+// Copyright 2015-present 650 Industries. All rights reserved.
+
+package expo.modules.fetch.next
+
+import java.nio.ByteBuffer
+
+internal class ResponseSink {
+  private val bodyQueue: MutableList<ByteArray> = mutableListOf()
+  private var isFinalized = false
+  var bodyUsed = false
+    private set
+
+  internal fun appendBufferBody(data: ByteArray) {
+    synchronized(this) {
+      if (isFinalized) return
+      bodyUsed = true
+      bodyQueue.add(data)
+    }
+  }
+
+  fun finalize(directBuffer: Boolean): ByteBuffer {
+    synchronized(this) {
+      if (isFinalized) {
+        return if (directBuffer) ByteBuffer.allocateDirect(0) else ByteBuffer.allocate(0)
+      }
+      val size = bodyQueue.sumOf { it.size }
+      val byteBuffer = if (directBuffer) {
+        ByteBuffer.allocateDirect(size)
+      } else {
+        ByteBuffer.allocate(size)
+      }
+      for (byteArray in bodyQueue) {
+        byteBuffer.put(byteArray)
+      }
+      bodyQueue.clear()
+      bodyUsed = true
+      isFinalized = true
+      return byteBuffer
+    }
+  }
+}

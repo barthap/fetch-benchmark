@@ -1,3 +1,4 @@
+import { fetch as expoFetchNext } from "expo-fetch-next/fetch";
 import { fetch as expoFetch } from "expo/fetch";
 import { fetch as nitroFetch } from "react-native-nitro-fetch";
 
@@ -112,19 +113,14 @@ export const benchmarks: Benchmark[] = [
     },
   }),
   makeBenchmark({
-    id: "expo-res-array-buffer2",
-    name: "Legacy arrayBuffer()",
+    id: "next-expo-res-array-buffer",
+    name: "[EXPO NEXT] res.arrayBuffer()",
     category: "Expo",
-    description: "Parse response as legacy copying ArrayBuffer",
-    prefetch: expoFetch,
+    description: "Parse response as ArrayBuffer (zero-copy)",
+    prefetch: expoFetchNext,
     measurePrefetchTime,
     run: async (response: Response): Promise<void> => {
-      if (Platform.OS !== "ios" || !("arrayBuffer2" in response)) {
-        console.warn("Android arrayBuffer() is already zero-copy. Only iOS is patched");
-        return;
-      }
-      // @ts-expect-error It's defined in native module (see patches/) but not in TS
-      const _result = await response.arrayBuffer2();
+      const _result = await response.arrayBuffer();
     },
   }),
   makeBenchmark({
