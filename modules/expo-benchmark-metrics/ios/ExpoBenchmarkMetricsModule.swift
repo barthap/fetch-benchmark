@@ -1,48 +1,43 @@
 import ExpoModulesCore
+import Darwin
 
 public class ExpoBenchmarkMetricsModule: Module {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
   public func definition() -> ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('ExpoBenchmarkMetrics')` in JavaScript.
     Name("ExpoBenchmarkMetrics")
 
-    // Defines constant property on the module.
-    Constant("PI") {
-      Double.pi
-    }
-
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
-
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      return "Hello world! 👋"
-    }
-
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { (value: String) in
-      // Send an event to JavaScript.
-      self.sendEvent("onChange", [
-        "value": value
-      ])
-    }
-
-    // Enables the module to be used as a native view. Definition components that are accepted as part of the
-    // view definition: Prop, Events.
-    View(ExpoBenchmarkMetricsView.self) {
-      // Defines a setter for the `url` prop.
-      Prop("url") { (view: ExpoBenchmarkMetricsView, url: URL) in
-        if view.webView.url != url {
-          view.webView.load(URLRequest(url: url))
+    Function("getMemoryUsageBytes") { () -> Double in
+      var info = mach_task_basic_info()
+      var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
+      let result = withUnsafeMutablePointer(to: &info) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+          task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
         }
       }
+      guard result == KERN_SUCCESS else {
+        return -1
+      }
+      return Double(info.resident_size)
+    }
 
-      Events("onLoad")
+    Function("getJSThreadCpuTimeMs") { () -> Double in
+      let thread = mach_thread_self()
+      defer { mach_port_deallocate(mach_task_self_, thread) }
+
+      var info = thread_basic_info()
+      var count = mach_msg_type_number_t(MemoryLayout<thread_basic_info>.size) / 4
+      let result = withUnsafeMutablePointer(to: &info) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+          thread_info(thread, thread_flavor_t(THREAD_BASIC_INFO), $0, &count)
+        }
+      }
+      guard result == KERN_SUCCESS else {
+        return -1
+      }
+      let userMs = Double(info.user_time.seconds) * 1000.0
+        + Double(info.user_time.microseconds) / 1000.0
+      let systemMs = Double(info.system_time.seconds) * 1000.0
+        + Double(info.system_time.microseconds) / 1000.0
+      return userMs + systemMs
     }
   }
 }
