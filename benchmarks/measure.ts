@@ -7,7 +7,7 @@ let BenchmarkMetrics: {
 } | null = null;
 
 try {
-  BenchmarkMetrics = require("expo-benchmark-metrics");
+  BenchmarkMetrics = require("../modules/expo-benchmark-metrics");
 } catch {
   // Module not available — native metrics will be undefined
 }
@@ -30,7 +30,7 @@ function takeSnapshot(): Snapshot {
  * Wraps a benchmark run function, adding native metric deltas to the result.
  */
 export async function withNativeMetrics<T extends BenchmarkResult>(
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
 ): Promise<T> {
   const before = takeSnapshot();
   const result = await fn();
