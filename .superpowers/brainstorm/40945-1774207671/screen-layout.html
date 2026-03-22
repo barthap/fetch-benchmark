@@ -1,0 +1,236 @@
+<h2>Benchmark Screen Layout</h2>
+<p class="subtitle">Proposed layout for both whole-body and streaming screens</p>
+
+<div class="mockup">
+  <div class="mockup-header">Benchmark Screen (Whole-Body / Streaming tab)</div>
+  <div class="mockup-body" style="background: #1a1a2e; color: #e0e0e0; font-family: system-ui; padding: 0;">
+
+    <!-- Section 1: Config Bar -->
+    <div style="padding: 12px 16px; border-bottom: 1px solid #333; background: #16213e;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px;">
+          <label style="font-size: 11px; color: #888; text-transform: uppercase;">Server URL</label>
+          <div style="background: #0d1b2a; border: 1px solid #444; border-radius: 6px; padding: 6px 10px; font-size: 13px; color: #aaa; margin-top: 2px;">
+            http://192.168.1.10:3001/employees_50MB.json
+          </div>
+        </div>
+        <div>
+          <label style="font-size: 11px; color: #888; text-transform: uppercase;">Runs</label>
+          <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+            <span style="background: #0d1b2a; border: 1px solid #444; border-radius: 4px; padding: 4px 8px; font-size: 13px;">−</span>
+            <span style="font-size: 15px; font-weight: bold;">3</span>
+            <span style="background: #0d1b2a; border: 1px solid #444; border-radius: 4px; padding: 4px 8px; font-size: 13px;">+</span>
+          </div>
+        </div>
+        <div>
+          <label style="font-size: 11px; color: #888; text-transform: uppercase;">Chart Metric</label>
+          <div style="display: flex; gap: 4px; margin-top: 2px;">
+            <span style="background: #6c63ff; color: white; border-radius: 4px; padding: 4px 10px; font-size: 12px;">Duration</span>
+            <span style="background: #0d1b2a; border: 1px solid #444; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #aaa;">Throughput</span>
+            <span style="background: #0d1b2a; border: 1px solid #444; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #aaa;">Memory</span>
+            <span style="background: #0d1b2a; border: 1px solid #444; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #aaa;">CPU</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Charts grouped by test -->
+    <div style="padding: 12px 16px; border-bottom: 1px solid #333;">
+      <div style="font-size: 13px; font-weight: 600; color: #6c63ff; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Results — Duration (ms)</div>
+
+      <!-- Test group 1 -->
+      <div style="margin-bottom: 14px;">
+        <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">res.json()</div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 3px;">
+          <span style="font-size: 11px; color: #aaa; width: 70px; text-align: right;">Built-in</span>
+          <div style="background: #e74c3c; height: 14px; border-radius: 3px; width: 80%;"></div>
+          <span style="font-size: 11px; color: #ccc;">842ms</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 3px;">
+          <span style="font-size: 11px; color: #aaa; width: 70px; text-align: right;">Expo</span>
+          <div style="background: #3498db; height: 14px; border-radius: 3px; width: 65%;"></div>
+          <span style="font-size: 11px; color: #ccc;">689ms</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; color: #aaa; width: 70px; text-align: right;">Nitro</span>
+          <div style="background: #2ecc71; height: 14px; border-radius: 3px; width: 45%;"></div>
+          <span style="font-size: 11px; color: #ccc;">478ms</span>
+        </div>
+      </div>
+
+      <!-- Test group 2 -->
+      <div style="margin-bottom: 14px;">
+        <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">res.text()</div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 3px;">
+          <span style="font-size: 11px; color: #aaa; width: 70px; text-align: right;">Built-in</span>
+          <div style="background: #e74c3c; height: 14px; border-radius: 3px; width: 70%;"></div>
+          <span style="font-size: 11px; color: #ccc;">312ms</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 3px;">
+          <span style="font-size: 11px; color: #aaa; width: 70px; text-align: right;">Expo</span>
+          <div style="background: #3498db; height: 14px; border-radius: 3px; width: 55%;"></div>
+          <span style="font-size: 11px; color: #ccc;">245ms</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; color: #aaa; width: 70px; text-align: right;">Nitro</span>
+          <div style="background: #2ecc71; height: 14px; border-radius: 3px; width: 40%;"></div>
+          <span style="font-size: 11px; color: #ccc;">178ms</span>
+        </div>
+      </div>
+
+      <!-- Test group 3 -->
+      <div>
+        <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">res.arrayBuffer()</div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 3px;">
+          <span style="font-size: 11px; color: #aaa; width: 70px; text-align: right;">Built-in</span>
+          <div style="background: #e74c3c; height: 14px; border-radius: 3px; width: 90%;"></div>
+          <span style="font-size: 11px; color: #ccc;">1024ms</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 3px;">
+          <span style="font-size: 11px; color: #aaa; width: 70px; text-align: right;">Expo</span>
+          <div style="background: #3498db; height: 14px; border-radius: 3px; width: 50%;"></div>
+          <span style="font-size: 11px; color: #ccc;">567ms</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; color: #aaa; width: 70px; text-align: right;">Nitro</span>
+          <div style="background: #2ecc71; height: 14px; border-radius: 3px; width: 15%;"></div>
+          <span style="font-size: 11px; color: #ccc;">168ms</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Implementations -->
+    <div style="padding: 12px 16px; border-bottom: 1px solid #333; background: #16213e;">
+      <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; color: #888;">Implementations</div>
+      <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+          <span style="width: 16px; height: 16px; border: 2px solid #e74c3c; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; background: #e74c3c; color: white; font-size: 10px;">&#10003;</span>
+          <span style="display: inline-block; width: 8px; height: 8px; background: #e74c3c; border-radius: 50%;"></span>
+          Built-in RN fetch
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+          <span style="width: 16px; height: 16px; border: 2px solid #3498db; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; background: #3498db; color: white; font-size: 10px;">&#10003;</span>
+          <span style="display: inline-block; width: 8px; height: 8px; background: #3498db; border-radius: 50%;"></span>
+          Expo Fetch
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+          <span style="width: 16px; height: 16px; border: 2px solid #2ecc71; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; background: #2ecc71; color: white; font-size: 10px;">&#10003;</span>
+          <span style="display: inline-block; width: 8px; height: 8px; background: #2ecc71; border-radius: 50%;"></span>
+          Nitro Fetch
+        </label>
+      </div>
+    </div>
+
+    <!-- Section 4: Run Controls -->
+    <div style="padding: 10px 16px; border-bottom: 1px solid #333; display: flex; gap: 10px; align-items: center;">
+      <button style="background: #6c63ff; color: white; border: none; border-radius: 6px; padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer;">Run Selected</button>
+      <button style="background: transparent; color: #6c63ff; border: 1px solid #6c63ff; border-radius: 6px; padding: 8px 14px; font-size: 12px; cursor: pointer;">Select All</button>
+      <button style="background: transparent; color: #888; border: 1px solid #444; border-radius: 6px; padding: 8px 14px; font-size: 12px; cursor: pointer;">Export JSON</button>
+    </div>
+
+    <!-- Section 5: Test Definition Cards (flat list) -->
+    <div style="padding: 12px 16px;">
+      <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #888;">Tests</div>
+
+      <!-- Card 1: Collapsed -->
+      <div style="background: #16213e; border: 1px solid #333; border-radius: 8px; margin-bottom: 8px; overflow: hidden;">
+        <div style="padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
+          <span style="width: 16px; height: 16px; border: 2px solid #6c63ff; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; background: #6c63ff; color: white; font-size: 10px;">&#10003;</span>
+          <div style="flex: 1;">
+            <div style="font-size: 14px; font-weight: 600;">res.json()</div>
+            <div style="font-size: 11px; color: #888;">Parse JSON from response body</div>
+          </div>
+          <span style="font-size: 11px; color: #2ecc71;">&#10003; Done</span>
+          <span style="color: #666; font-size: 16px;">&#9660;</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Expanded with mini-table -->
+      <div style="background: #16213e; border: 1px solid #6c63ff; border-radius: 8px; margin-bottom: 8px; overflow: hidden;">
+        <div style="padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
+          <span style="width: 16px; height: 16px; border: 2px solid #6c63ff; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; background: #6c63ff; color: white; font-size: 10px;">&#10003;</span>
+          <div style="flex: 1;">
+            <div style="font-size: 14px; font-weight: 600;">res.text()</div>
+            <div style="font-size: 11px; color: #888;">Read response as text</div>
+          </div>
+          <span style="font-size: 11px; color: #2ecc71;">&#10003; Done</span>
+          <span style="color: #aaa; font-size: 16px;">&#9650;</span>
+        </div>
+        <!-- Expanded: mini results table -->
+        <div style="border-top: 1px solid #333; padding: 10px 14px; background: #0d1b2a;">
+          <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+            <thead>
+              <tr style="color: #888; text-transform: uppercase; font-size: 10px;">
+                <th style="text-align: left; padding: 3px 6px;">Impl</th>
+                <th style="text-align: right; padding: 3px 6px;">Time</th>
+                <th style="text-align: right; padding: 3px 6px;">Size</th>
+                <th style="text-align: right; padding: 3px 6px;">Speed</th>
+                <th style="text-align: right; padding: 3px 6px;">Mem Δ</th>
+                <th style="text-align: right; padding: 3px 6px;">CPU</th>
+                <th style="text-align: right; padding: 3px 6px;">GC</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="color: #e0e0e0;">
+                <td style="padding: 4px 6px;"><span style="display: inline-block; width: 6px; height: 6px; background: #e74c3c; border-radius: 50; margin-right: 4px;"></span>Built-in</td>
+                <td style="text-align: right; padding: 4px 6px;">312ms</td>
+                <td style="text-align: right; padding: 4px 6px;">50 MB</td>
+                <td style="text-align: right; padding: 4px 6px;">160 MB/s</td>
+                <td style="text-align: right; padding: 4px 6px; color: #e74c3c;">+48 MB</td>
+                <td style="text-align: right; padding: 4px 6px;">89ms</td>
+                <td style="text-align: right; padding: 4px 6px;">3 (12ms)</td>
+              </tr>
+              <tr style="color: #e0e0e0; background: #111d30;">
+                <td style="padding: 4px 6px;"><span style="display: inline-block; width: 6px; height: 6px; background: #3498db; border-radius: 50; margin-right: 4px;"></span>Expo</td>
+                <td style="text-align: right; padding: 4px 6px;">245ms</td>
+                <td style="text-align: right; padding: 4px 6px;">50 MB</td>
+                <td style="text-align: right; padding: 4px 6px;">204 MB/s</td>
+                <td style="text-align: right; padding: 4px 6px; color: #e74c3c;">+32 MB</td>
+                <td style="text-align: right; padding: 4px 6px;">67ms</td>
+                <td style="text-align: right; padding: 4px 6px;">2 (8ms)</td>
+              </tr>
+              <tr style="color: #e0e0e0;">
+                <td style="padding: 4px 6px;"><span style="display: inline-block; width: 6px; height: 6px; background: #2ecc71; border-radius: 50; margin-right: 4px;"></span>Nitro</td>
+                <td style="text-align: right; padding: 4px 6px;">178ms</td>
+                <td style="text-align: right; padding: 4px 6px;">50 MB</td>
+                <td style="text-align: right; padding: 4px 6px;">281 MB/s</td>
+                <td style="text-align: right; padding: 4px 6px; color: #2ecc71;">−8 MB</td>
+                <td style="text-align: right; padding: 4px 6px;">42ms</td>
+                <td style="text-align: right; padding: 4px 6px;">1 (3ms)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Card 3: Not yet run -->
+      <div style="background: #16213e; border: 1px solid #333; border-radius: 8px; margin-bottom: 8px;">
+        <div style="padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
+          <span style="width: 16px; height: 16px; border: 2px solid #444; border-radius: 3px;"></span>
+          <div style="flex: 1;">
+            <div style="font-size: 14px; font-weight: 600;">res.arrayBuffer()</div>
+            <div style="font-size: 11px; color: #888;">Read response as ArrayBuffer</div>
+          </div>
+          <span style="color: #666; font-size: 16px;">&#9660;</span>
+        </div>
+      </div>
+
+      <!-- Card 4: Running -->
+      <div style="background: #16213e; border: 1px solid #f39c12; border-radius: 8px; margin-bottom: 8px;">
+        <div style="padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
+          <span style="width: 16px; height: 16px; border: 2px solid #6c63ff; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; background: #6c63ff; color: white; font-size: 10px;">&#10003;</span>
+          <div style="flex: 1;">
+            <div style="font-size: 14px; font-weight: 600;">res.text() + JSON.parse</div>
+            <div style="font-size: 11px; color: #888;">Text then manual parse</div>
+          </div>
+          <span style="font-size: 11px; color: #f39c12;">&#9679; Running Expo (2/3)...</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<p style="margin-top: 16px; color: #888; font-size: 14px;">
+  <strong>Layout order top-to-bottom:</strong> Config (URL, runs, metric selector) → Charts grouped by test → Implementation checkboxes → Run controls → Test cards (flat list, expandable with mini result table)
+</p>
