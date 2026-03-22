@@ -48,6 +48,18 @@ internal class ChunkCoalescer(
       return
     }
 
+    // Tiny chunk (e.g. SSE token): append then flush immediately to preserve
+    // real-time delivery. Coalescing overhead isn't worth it for tiny payloads.
+    if (data.size <= IMMEDIATE_FLUSH_THRESHOLD) {
+      val pending = lock.withLock {
+        buffer.put(data)
+        cancelTimerLocked()
+        flushBufferLocked()
+      }
+      pending?.let { onFlush(it) }
+      return
+    }
+
     val pending = lock.withLock {
       if (buffer.remaining() < data.size) {
         val flushed = flushBufferLocked()
@@ -84,6 +96,22 @@ internal class ChunkCoalescer(
         "Incomplete Okio drain: expected $available bytes, got ${direct.position()}"
       }
       onFlush(NativeArrayBuffer.wrap(direct))
+      return
+    }
+
+    // Tiny chunk (e.g. SSE token): append then flush immediately
+    if (available <= IMMEDIATE_FLUSH_THRESHOLD) {
+      val pendingPair = lock.withLock {
+        val overflow = if (buffer.remaining() < available.toInt()) {
+          flushBufferLocked()
+        } else null
+        while (okioBuffer.size > 0L && buffer.hasRemaining()) { okioBuffer.read(buffer) }
+        cancelTimerLocked()
+        val current = flushBufferLocked()
+        Pair(overflow, current)
+      }
+      pendingPair.first?.let { onFlush(it) }
+      pendingPair.second?.let { onFlush(it) }
       return
     }
 
@@ -155,5 +183,6 @@ internal class ChunkCoalescer(
   companion object {
     const val DEFAULT_SIZE_THRESHOLD = 64 * 1024  // 64KB
     const val DEFAULT_TIMEOUT_MS = 16L             // ~1 frame
+    const val IMMEDIATE_FLUSH_THRESHOLD = 256      // Chunks this small bypass coalescing
   }
 }
