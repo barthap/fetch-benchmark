@@ -1,9 +1,10 @@
 import Constants from "expo-constants";
 import { useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, Share, StyleSheet, View } from "react-native";
 import { Button, Text, TextInput } from "react-native-paper";
 import { benchmarks } from "../../benchmarks";
-import type { BenchmarkResult, BenchmarkStatus } from "../../benchmarks/types";
+import { runMultiple } from "../../benchmarks/multi-run";
+import type { BenchmarkStatus, MultiRunResult } from "../../benchmarks/types";
 import { BenchmarkCard } from "../../components/BenchmarkCard";
 import { ResultsChart } from "../../components/ResultsChart";
 
@@ -15,7 +16,9 @@ export default function HomeScreen() {
   // https://jsonplaceholder.typicode.com/photos
   const [url, SHUrl] = useState(`http://${hostURI}:3001/employees_50MB.json`);
   const [statuses, setStatuses] = useState<Record<string, BenchmarkStatus>>({});
-  const [results, setResults] = useState<Record<string, BenchmarkResult>>({});
+  const [results, setResults] = useState<Record<string, MultiRunResult>>({});
+  const [runCount, setRunCount] = useState(3);
+  const [runProgress, setRunProgress] = useState<{ current: number; total: number } | null>(null);
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<Set<string>>(() => new Set(allIDs));
 
   const toggleBenchmark = (id: string) => {
@@ -29,30 +32,58 @@ export default function HomeScreen() {
   const runBenchmark = async (id: string) => {
     const benchmark = benchmarks.find((b) => b.id === id);
     if (!benchmark) return;
-
-    setStatuses((prev) => ({ ...prev, [id]: "running" }));
-    setResults((prev) => {
-      const newResults = { ...prev };
-      delete newResults[id];
-      return newResults;
-    });
-
     try {
-      const result = await benchmark.run(url);
-      setResults((prev) => ({ ...prev, [id]: result }));
+      setStatuses((prev) => ({ ...prev, [id]: "running" }));
+      setResults((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+
+      const multiResult = await runMultiple(() => benchmark.run(url), {
+        runCount,
+        onProgress: (current, total) => setRunProgress({ current, total }),
+      });
+
+      setResults((prev) => ({ ...prev, [id]: multiResult }));
       setStatuses((prev) => ({ ...prev, [id]: "success" }));
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      setStatuses((prev) => ({ ...prev, [id]: "error" }));
       setResults((prev) => ({
         ...prev,
         [id]: {
-          durationMs: 0,
-          sizeBytes: 0,
-          error: message,
+          median: {
+            durationMs: 0,
+            sizeBytes: 0,
+            error: e instanceof Error ? e.message : String(e),
+          },
+          runs: [],
+          runCount: 0,
         },
       }));
-      setStatuses((prev) => ({ ...prev, [id]: "error" }));
+    } finally {
+      setRunProgress(null);
     }
+  };
+
+  const medianResults = Object.fromEntries(
+    Object.entries(results).map(([id, mr]) => [id, mr.median])
+  );
+
+  const exportResults = async () => {
+    const data = {
+      exportVersion: 2,
+      device: Constants.deviceName ?? "unknown",
+      timestamp: new Date().toISOString(),
+      runCount,
+      results: Object.fromEntries(
+        Object.entries(results).map(([id, mr]) => [
+          id,
+          { median: mr.median, runs: mr.runs, warmUpRun: mr.warmUpRun },
+        ])
+      ),
+    };
+    await Share.share({ message: JSON.stringify(data, null, 2) });
   };
 
   const runAll = async () => {
@@ -66,7 +97,7 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <ResultsChart benchmarks={benchmarks} results={results} />
+      <ResultsChart benchmarks={benchmarks} results={medianResults} />
       <View style={styles.controls}>
         <TextInput
           label="Target URL"
@@ -93,9 +124,23 @@ export default function HomeScreen() {
             Deselect All
           </Button>
         </View>
-        <Button mode="contained" onPress={runAll} icon="play-box-multiple">
-          Run Selected
-        </Button>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text>Runs:</Text>
+          <Button mode="outlined" compact onPress={() => setRunCount((c) => Math.max(1, c - 1))}>-</Button>
+          <Text>{runCount}</Text>
+          <Button mode="outlined" compact onPress={() => setRunCount((c) => Math.min(10, c + 1))}>+</Button>
+        </View>
+        {runProgress && (
+          <Text style={{ textAlign: "center" }}>Run {runProgress.current}/{runProgress.total}</Text>
+        )}
+        <View style={styles.buttonRow}>
+          <Button mode="contained" onPress={runAll} icon="play-box-multiple" style={styles.flexButton}>
+            Run Selected
+          </Button>
+          <Button mode="outlined" onPress={exportResults} icon="export-variant" style={styles.flexButton}>
+            Export
+          </Button>
+        </View>
       </View>
 
       {benchmarks.length === 0 ? (
@@ -108,7 +153,7 @@ export default function HomeScreen() {
             key={b.id}
             benchmark={b}
             status={statuses[b.id] || "idle"}
-            result={results[b.id]}
+            result={results[b.id]?.median}
             onRun={() => runBenchmark(b.id)}
             isSelected={selectedBenchmarks.has(b.id)}
             onToggle={() => toggleBenchmark(b.id)}
