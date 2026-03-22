@@ -64,6 +64,44 @@ internal class ChunkCoalescer(
   }
 
   /**
+   * Append data by reading directly from an Okio [okio.Buffer] into the coalescing buffer,
+   * bypassing intermediate ByteArray allocation. Uses [okio.Buffer.read] from [ReadableByteChannel].
+   */
+  fun appendFromOkio(okioBuffer: okio.Buffer) {
+    val available = okioBuffer.size
+    if (available == 0L) return
+
+    if (available > sizeThreshold) {
+      // Oversized: flush pending, then emit a purpose-allocated direct buffer
+      val pending = lock.withLock {
+        cancelTimerLocked()
+        flushBufferLocked()
+      }
+      pending?.let { onFlush(it) }
+      val direct = ByteBuffer.allocateDirect(available.toInt())
+      while (okioBuffer.size > 0L) { okioBuffer.read(direct) }
+      check(direct.position() == available.toInt()) {
+        "Incomplete Okio drain: expected $available bytes, got ${direct.position()}"
+      }
+      onFlush(NativeArrayBuffer.wrap(direct))
+      return
+    }
+
+    val pending = lock.withLock {
+      val flushed = if (buffer.remaining() < available.toInt()) {
+        flushBufferLocked()
+      } else null
+      while (okioBuffer.size > 0L && buffer.hasRemaining()) { okioBuffer.read(buffer) }
+      check(okioBuffer.size == 0L) {
+        "Okio buffer not fully drained: ${okioBuffer.size} bytes remaining"
+      }
+      resetTimerLocked()
+      flushed
+    }
+    pending?.let { onFlush(it) }
+  }
+
+  /**
    * Flush any pending data. Call before emitting didComplete or on cancel.
    * Cancels the timer to prevent races.
    */

@@ -202,18 +202,19 @@ internal class NativeResponse(appContext: AppContext, private val coroutineScope
   private fun pumpResponseBodyStream(stream: BufferedSource) {
     try {
       while (!stream.exhausted()) {
-        val data = stream.buffer.readByteArray()
         // Hold routingLock so that state check + data routing is atomic.
         // This prevents startStreaming() from finalizing the sink between
         // our state read and appendBufferBody() call. See expo/expo#42161.
+        // The Okio read is inside the lock because it only copies already-buffered
+        // segments (no network I/O); the blocking exhausted() call is outside.
         val shouldContinue = synchronized(routingLock) {
           when (state) {
             ResponseState.RESPONSE_RECEIVED -> {
-              sink.appendBufferBody(data)
+              sink.appendBufferBody(stream.buffer.readByteArray())
               true
             }
             ResponseState.BODY_STREAMING_STARTED -> {
-              coalescer?.append(data)
+              coalescer?.appendFromOkio(stream.buffer)
               true
             }
             else -> false
