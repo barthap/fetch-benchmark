@@ -1,5 +1,3 @@
-import type { BasicBenchmark, Benchmark, BenchmarkResult, PrefetchedBenchmark } from "./types";
-
 export function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return "0 Bytes";
 
@@ -17,39 +15,4 @@ export function calculateThroughput(sizeBytes: number, durationMs: number): numb
   const sizeMb = sizeBytes / (1024 * 1024);
   const durationSec = durationMs / 1000;
   return sizeMb / durationSec;
-}
-
-export function makeBenchmark(benchmark: BasicBenchmark | PrefetchedBenchmark): Benchmark {
-  return {
-    ...benchmark,
-    run: async (url: string): Promise<BenchmarkResult> => {
-      let response: Response;
-      let start: number;
-      if ("prefetch" in benchmark) {
-        start = Date.now();
-        response = await benchmark.prefetch(url);
-        if (!benchmark.measurePrefetchTime) {
-          // reset start time after prefetch
-          start = Date.now();
-        }
-
-        await benchmark.run(response);
-      } else {
-        start = Date.now();
-        response = await benchmark.run(url);
-      }
-      const end = Date.now();
-
-      const durationMs = end - start;
-      const sizeBytes = parseInt(response.headers.get("Content-Length") as string, 10);
-      const throughput = calculateThroughput(sizeBytes, durationMs);
-
-      return {
-        durationMs,
-        sizeBytes,
-        throughputMbPerCc: throughput,
-        statusCode: response.status,
-      };
-    },
-  };
 }
