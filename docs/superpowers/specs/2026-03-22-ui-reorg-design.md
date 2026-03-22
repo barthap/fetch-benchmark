@@ -7,7 +7,7 @@ Reorganize the fetch-benchmark app's code and UI around two first-class concepts
 ## Background
 
 Current pain points:
-- `benchmarks/index.ts` duplicates 5 test definitions × 3 categories + 1 special variant (16 benchmark objects with copy-pasted logic)
+- `benchmarks/index.ts` duplicates 5 test definitions × 3 categories (15 benchmark objects with copy-pasted logic)
 - Streaming tab hardcodes "before"/"after" as the only two implementations, making a 3rd awkward to add
 - The UI displays a flat list of results with no cross-implementation comparison
 - Category selection is radio-based (streaming) — only one implementation visible at a time
@@ -20,7 +20,7 @@ Two phases in a single implementation plan:
 ```
 Phase 1: Code organization
   -> Shared Implementation/TestDefinition types
-  -> Whole-body: 5 tests defined once, 4 implementations injected
+  -> Whole-body: 5 tests defined once, 3 implementations injected
   -> Streaming: refactor to same pattern, proper implementation labels
   -> Results keyed as Record<implId, Record<testId, MultiRunResult>>
 
@@ -124,7 +124,7 @@ export const wholeBodyImplementations: Implementation[] = [
 
 The adapted `makeTest` helper wraps the prefetch/run pattern internally. The external interface is always `TestDefinition.run(impl, url) => Promise<BenchmarkResult>`.
 
-**Note on `expo-fetch-next` arrayBuffer test**: The current codebase has a 6th test (`[EXPO NEXT] res.arrayBuffer()`) that uses `expoFetchNext` as its fetch function. Under the new model, `expoFetchNext` becomes a 4th implementation (`id: "expo-next"`, `shortLabel: "ExpoNext"`, `color: "#9b59b6"`) rather than a separate test definition. The arrayBuffer test definition is shared across all implementations including this one.
+The existing `[EXPO NEXT] res.arrayBuffer()` special variant is removed — it was a one-off experiment that doesn't fit the new model.
 
 **Delete: `benchmarks/index.ts`** — fully replaced.
 
