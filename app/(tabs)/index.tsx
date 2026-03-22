@@ -1,180 +1,277 @@
+// app/(tabs)/index.tsx
 import Constants from "expo-constants";
 import { useState } from "react";
 import { ScrollView, Share, StyleSheet, View } from "react-native";
-import { Button, Text, TextInput } from "react-native-paper";
-import { wholeBodyTests, wholeBodyImplementations } from "../../benchmarks/whole-body";
+import { Button, Text, TextInput, useTheme } from "react-native-paper";
+import {
+  wholeBodyTests,
+  wholeBodyImplementations,
+} from "../../benchmarks/whole-body";
+import type { ResultsMap } from "../../benchmarks/implementation";
+import { METRICS } from "../../benchmarks/metrics";
 import { runMultiple } from "../../benchmarks/multi-run";
-import type { Benchmark, BenchmarkStatus, MultiRunResult } from "../../benchmarks/types";
+import type { BenchmarkResult } from "../../benchmarks/types";
 import { BenchmarkCard } from "../../components/BenchmarkCard";
-import { ResultsChart } from "../../components/ResultsChart";
+import { ImplementationSelector } from "../../components/ImplementationSelector";
+import { MetricSelector } from "../../components/MetricSelector";
+import { ResultsChartGroup } from "../../components/ResultsChartGroup";
 
-const hostURI = Constants.expoConfig?.hostUri?.split(":")?.[0] ?? "localhost";
+const hostURI =
+  Constants.expoConfig?.hostUri?.split(":")?.[0] ?? "localhost";
 
-// Temporary bridge: flatten tests × impls into old Benchmark[] for current UI
-const benchmarks: Benchmark[] = wholeBodyImplementations
-  .filter((impl) => impl.enabled)
-  .flatMap((impl) =>
-    wholeBodyTests.map((test) => ({
-      id: `${impl.id}:${test.id}`,
-      name: test.name,
-      description: test.description,
-      category: impl.shortLabel,
-      run: (url: string) => test.run(impl, url),
-    })),
-  );
-
-const allIDs = new Set(benchmarks.map((b) => b.id));
+// Metrics available for whole-body chart
+const wholeBodyMetrics = METRICS.filter((m) =>
+  [
+    "durationMs",
+    "throughputMbPerCc",
+    "memoryDeltaBytes",
+    "jsThreadCpuMs",
+    "gcCount",
+  ].includes(m.key),
+);
 
 export default function HomeScreen() {
-  // https://jsonplaceholder.typicode.com/photos
-  const [url, SHUrl] = useState(`http://${hostURI}:3001/employees_50MB.json`);
-  const [statuses, setStatuses] = useState<Record<string, BenchmarkStatus>>({});
-  const [results, setResults] = useState<Record<string, MultiRunResult>>({});
+  const theme = useTheme();
+  const [url, setUrl] = useState(
+    `http://${hostURI}:3001/employees_50MB.json`,
+  );
   const [runCount, setRunCount] = useState(3);
-  const [runProgress, setRunProgress] = useState<{ current: number; total: number } | null>(null);
-  const [selectedBenchmarks, setSelectedBenchmarks] = useState<Set<string>>(() => new Set(allIDs));
+  const [chartMetric, setChartMetric] = useState("durationMs");
 
-  const toggleBenchmark = (id: string) => {
-    setSelectedBenchmarks((prev) => {
-      const items = new Set(prev);
-      items.has(id) ? items.delete(id) : items.add(id);
-      return items;
+  const [selectedTests, setSelectedTests] = useState<Set<string>>(
+    () => new Set(wholeBodyTests.map((t) => t.id)),
+  );
+  const [selectedImpls, setSelectedImpls] = useState<Set<string>>(
+    () =>
+      new Set(
+        wholeBodyImplementations.filter((i) => i.enabled).map((i) => i.id),
+      ),
+  );
+
+  const [results, setResults] = useState<ResultsMap>({});
+  const [runningState, setRunningState] = useState<{
+    testId: string;
+    implId: string;
+    runIndex: number;
+    runCount: number;
+  } | null>(null);
+
+  const toggleTest = (id: string) => {
+    setSelectedTests((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
   };
 
-  const runBenchmark = async (id: string) => {
-    const benchmark = benchmarks.find((b) => b.id === id);
-    if (!benchmark) return;
-    try {
-      setStatuses((prev) => ({ ...prev, [id]: "running" }));
-      setResults((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-
-      const multiResult = await runMultiple(() => benchmark.run(url), {
-        runCount,
-        onProgress: (current, total) => setRunProgress({ current, total }),
-      });
-
-      setResults((prev) => ({ ...prev, [id]: multiResult }));
-      setStatuses((prev) => ({ ...prev, [id]: "success" }));
-    } catch (e) {
-      setStatuses((prev) => ({ ...prev, [id]: "error" }));
-      setResults((prev) => ({
-        ...prev,
-        [id]: {
-          median: {
-            durationMs: 0,
-            sizeBytes: 0,
-            error: e instanceof Error ? e.message : String(e),
-          },
-          runs: [],
-          runCount: 0,
-        },
-      }));
-    } finally {
-      setRunProgress(null);
-    }
+  const toggleImpl = (id: string) => {
+    setSelectedImpls((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
 
-  const medianResults = Object.fromEntries(
-    Object.entries(results).map(([id, mr]) => [id, mr.median])
-  );
+  const runAll = async () => {
+    const tests = wholeBodyTests.filter((t) => selectedTests.has(t.id));
+    const impls = wholeBodyImplementations.filter(
+      (i) => i.enabled && selectedImpls.has(i.id),
+    );
+
+    for (const test of tests) {
+      for (const impl of impls) {
+        try {
+          setRunningState({
+            testId: test.id,
+            implId: impl.id,
+            runIndex: 0,
+            runCount,
+          });
+
+          const multiResult = await runMultiple(
+            () => test.run(impl, url),
+            {
+              runCount,
+              onProgress: (current, total) =>
+                setRunningState({
+                  testId: test.id,
+                  implId: impl.id,
+                  runIndex: current,
+                  runCount: total,
+                }),
+            },
+          );
+
+          setResults((prev) => ({
+            ...prev,
+            [impl.id]: {
+              ...prev[impl.id],
+              [test.id]: multiResult,
+            },
+          }));
+        } catch (e) {
+          setResults((prev) => ({
+            ...prev,
+            [impl.id]: {
+              ...prev[impl.id],
+              [test.id]: {
+                median: {
+                  durationMs: 0,
+                  sizeBytes: 0,
+                  error: e instanceof Error ? e.message : String(e),
+                },
+                runs: [],
+                runCount: 0,
+              },
+            },
+          }));
+        }
+      }
+    }
+    setRunningState(null);
+  };
 
   const exportResults = async () => {
     const data = {
-      exportVersion: 2,
+      exportVersion: 3,
       device: Constants.deviceName ?? "unknown",
       timestamp: new Date().toISOString(),
-      expoFetchVersion: Constants.expoConfig?.extra?.expoFetchVersion ?? "unknown",
+      expoFetchVersion:
+        Constants.expoConfig?.extra?.expoFetchVersion ?? "unknown",
       benchmarkAppVersion: Constants.expoConfig?.version ?? "unknown",
       runCount,
-      results: Object.fromEntries(
-        Object.entries(results).map(([id, mr]) => [
-          id,
-          { median: mr.median, runs: mr.runs, warmUpRun: mr.warmUpRun },
-        ])
-      ),
+      results,
     };
     await Share.share({ message: JSON.stringify(data, null, 2) });
   };
 
-  const runAll = async () => {
-    for (const b of benchmarks) {
-      if (selectedBenchmarks.has(b.id)) {
-        console.log(`Running benchmark: ${b.category} - ${b.name}`);
-        await runBenchmark(b.id);
-      }
-    }
-  };
+  const hasAnyResults = Object.keys(results).length > 0;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <ResultsChart benchmarks={benchmarks} results={medianResults} />
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={styles.content}
+    >
+      {/* Config Bar */}
       <View style={styles.controls}>
         <TextInput
           label="Target URL"
           value={url}
-          onChangeText={SHUrl}
+          onChangeText={setUrl}
           mode="outlined"
-          style={styles.input}
           autoCapitalize="none"
           keyboardType="url"
         />
-        <View style={styles.buttonRow}>
-          <Button
-            mode="contained-tonal"
-            onPress={() => setSelectedBenchmarks(new Set(allIDs))}
-            style={styles.flexButton}
-          >
-            Select All
-          </Button>
-          <Button
-            mode="contained-tonal"
-            onPress={() => setSelectedBenchmarks(new Set())}
-            style={styles.flexButton}
-          >
-            Deselect All
-          </Button>
+        <View style={styles.row}>
+          <View style={styles.row}>
+            <Text>Runs:</Text>
+            <Button
+              mode="outlined"
+              compact
+              onPress={() => setRunCount((c) => Math.max(1, c - 1))}
+            >
+              -
+            </Button>
+            <Text>{runCount}</Text>
+            <Button
+              mode="outlined"
+              compact
+              onPress={() => setRunCount((c) => Math.min(10, c + 1))}
+            >
+              +
+            </Button>
+          </View>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text>Runs:</Text>
-          <Button mode="outlined" compact onPress={() => setRunCount((c) => Math.max(1, c - 1))}>-</Button>
-          <Text>{runCount}</Text>
-          <Button mode="outlined" compact onPress={() => setRunCount((c) => Math.min(10, c + 1))}>+</Button>
-        </View>
-        {runProgress && (
-          <Text style={{ textAlign: "center" }}>Run {runProgress.current}/{runProgress.total}</Text>
-        )}
-        <View style={styles.buttonRow}>
-          <Button mode="contained" onPress={runAll} icon="play-box-multiple" style={styles.flexButton}>
-            Run Selected
-          </Button>
-          <Button mode="outlined" onPress={exportResults} icon="export-variant" style={styles.flexButton}>
-            Export
-          </Button>
-        </View>
+        <MetricSelector
+          metrics={wholeBodyMetrics}
+          selected={chartMetric}
+          onSelect={setChartMetric}
+        />
       </View>
 
-      {benchmarks.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text variant="bodyLarge">No benchmarks registered yet.</Text>
-        </View>
-      ) : (
-        benchmarks.map((b) => (
-          <BenchmarkCard
-            key={b.id}
-            benchmark={b}
-            status={statuses[b.id] || "idle"}
-            result={results[b.id]?.median}
-            onRun={() => runBenchmark(b.id)}
-            isSelected={selectedBenchmarks.has(b.id)}
-            onToggle={() => toggleBenchmark(b.id)}
-          />
-        ))
+      {/* Charts */}
+      {hasAnyResults && (
+        <ResultsChartGroup
+          tests={wholeBodyTests}
+          implementations={wholeBodyImplementations.filter(
+            (i) => selectedImpls.has(i.id) && i.enabled,
+          )}
+          results={results}
+          metricKey={chartMetric}
+        />
       )}
+
+      {/* Implementations */}
+      <ImplementationSelector
+        implementations={wholeBodyImplementations}
+        selected={selectedImpls}
+        onToggle={toggleImpl}
+      />
+
+      {/* Run Controls */}
+      <View style={styles.buttonRow}>
+        <Button
+          mode="contained"
+          onPress={runAll}
+          icon="play-box-multiple"
+          style={styles.flexButton}
+          disabled={runningState !== null}
+        >
+          {runningState ? "Running…" : "Run Selected"}
+        </Button>
+        <Button
+          mode="contained-tonal"
+          onPress={() =>
+            setSelectedTests(new Set(wholeBodyTests.map((t) => t.id)))
+          }
+          style={styles.flexButton}
+        >
+          Select All
+        </Button>
+        <Button
+          mode="contained-tonal"
+          onPress={() => setSelectedTests(new Set())}
+          style={styles.flexButton}
+        >
+          Deselect
+        </Button>
+        <Button
+          mode="outlined"
+          onPress={exportResults}
+          icon="export-variant"
+          style={styles.flexButton}
+        >
+          Export
+        </Button>
+      </View>
+
+      {/* Test Cards */}
+      {wholeBodyTests.map((test) => {
+        const testResults: Record<string, any> = {};
+        for (const impl of wholeBodyImplementations) {
+          if (results[impl.id]?.[test.id]) {
+            testResults[impl.id] = results[impl.id][test.id];
+          }
+        }
+        const hasResult = Object.keys(testResults).length > 0;
+
+        return (
+          <BenchmarkCard
+            key={test.id}
+            testId={test.id}
+            testName={test.name}
+            testDescription={test.description}
+            implementations={wholeBodyImplementations}
+            results={testResults}
+            isSelected={selectedTests.has(test.id)}
+            onToggle={() => toggleTest(test.id)}
+            runningState={
+              runningState?.testId === test.id ? runningState : null
+            }
+            hasAnyResult={hasResult}
+          />
+        );
+      })}
     </ScrollView>
   );
 }
@@ -182,26 +279,24 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
   },
   content: {
     padding: 16,
     paddingBottom: 40,
   },
   controls: {
-    marginBottom: 20,
-    gap: 12,
+    marginBottom: 16,
+    gap: 10,
   },
-  input: {
-    backgroundColor: "white",
-  },
-  emptyState: {
+  row: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 40,
+    gap: 8,
   },
   buttonRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
+    marginVertical: 12,
   },
   flexButton: {
     flex: 1,
