@@ -2,13 +2,26 @@ import Constants from "expo-constants";
 import { useState } from "react";
 import { ScrollView, Share, StyleSheet, View } from "react-native";
 import { Button, Text, TextInput } from "react-native-paper";
-import { benchmarks } from "../../benchmarks";
+import { wholeBodyTests, wholeBodyImplementations } from "../../benchmarks/whole-body";
 import { runMultiple } from "../../benchmarks/multi-run";
-import type { BenchmarkStatus, MultiRunResult } from "../../benchmarks/types";
+import type { Benchmark, BenchmarkStatus, MultiRunResult } from "../../benchmarks/types";
 import { BenchmarkCard } from "../../components/BenchmarkCard";
 import { ResultsChart } from "../../components/ResultsChart";
 
 const hostURI = Constants.expoConfig?.hostUri?.split(":")?.[0] ?? "localhost";
+
+// Temporary bridge: flatten tests × impls into old Benchmark[] for current UI
+const benchmarks: Benchmark[] = wholeBodyImplementations
+  .filter((impl) => impl.enabled)
+  .flatMap((impl) =>
+    wholeBodyTests.map((test) => ({
+      id: `${impl.id}:${test.id}`,
+      name: test.name,
+      description: test.description,
+      category: impl.shortLabel,
+      run: (url: string) => test.run(impl, url),
+    })),
+  );
 
 const allIDs = new Set(benchmarks.map((b) => b.id));
 
