@@ -44,13 +44,6 @@ export function makeBenchmark(benchmark: BasicBenchmark | PrefetchedBenchmark): 
       const sizeBytes = parseInt(response.headers.get("Content-Length") as string, 10);
       const throughput = calculateThroughput(sizeBytes, durationMs);
 
-      // Garbage-collect after memory-consuming benchmarks
-      if (global.gc) {
-        global.gc();
-      } else if (globalThis.gc) {
-        globalThis.gc();
-      }
-
       return {
         durationMs,
         sizeBytes,

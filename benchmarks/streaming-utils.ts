@@ -15,13 +15,6 @@ export function makeStreamingBenchmark(
       const url = `${baseUrl}${def.endpoint}`;
       const result = await def.run(fetchFn, url);
 
-      // GC after each benchmark
-      if (global.gc) {
-        global.gc();
-      } else if (globalThis.gc) {
-        globalThis.gc();
-      }
-
       return result;
     },
   };
