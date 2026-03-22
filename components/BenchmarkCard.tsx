@@ -49,6 +49,7 @@ export function BenchmarkCard({ benchmark, status, result, onRun, isSelected, on
         )}
 
         {status === "success" && result && (
+          <>
           <View style={styles.results}>
             <View style={styles.metric}>
               <Text variant="labelSmall">Time</Text>
@@ -95,6 +96,39 @@ export function BenchmarkCard({ benchmark, status, result, onRun, isSelected, on
               </View>
             )}
           </View>
+          {(result.memoryDeltaBytes != null ||
+            result.jsThreadCpuMs != null ||
+            result.gcCount != null) && (
+            <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#e0e0e0" }}>
+              <Text style={{ fontSize: 11, fontWeight: "bold", color: "#666", marginBottom: 4 }}>
+                Native Metrics
+              </Text>
+              {result.memoryDeltaBytes != null && (
+                <View style={styles.metricRow}>
+                  <Text style={styles.metricLabel}>Memory delta</Text>
+                  <Text style={styles.metricValue}>
+                    {result.memoryDeltaBytes >= 0 ? "+" : ""}
+                    {formatBytes(Math.abs(result.memoryDeltaBytes))}
+                  </Text>
+                </View>
+              )}
+              {result.jsThreadCpuMs != null && (
+                <View style={styles.metricRow}>
+                  <Text style={styles.metricLabel}>JS CPU time</Text>
+                  <Text style={styles.metricValue}>{result.jsThreadCpuMs} ms</Text>
+                </View>
+              )}
+              {result.gcCount != null && (
+                <View style={styles.metricRow}>
+                  <Text style={styles.metricLabel}>GC</Text>
+                  <Text style={styles.metricValue}>
+                    {result.gcCount} collections, {result.gcTotalPauseMs ?? 0} ms
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+          </>
         )}
       </Card.Content>
       <Card.Actions>
@@ -131,6 +165,19 @@ const styles = StyleSheet.create({
   },
   metric: {
     alignItems: "center",
+  },
+  metricRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 2,
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: "#666",
+  },
+  metricValue: {
+    fontSize: 12,
+    fontWeight: "bold",
   },
   checkboxWrapper: {
     padding: 0,
