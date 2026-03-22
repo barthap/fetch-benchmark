@@ -49,9 +49,9 @@ export function BenchmarkCard({
     statusColor = "#2ecc71";
   }
 
-  // Determine which metrics have data in any result
+  // Determine which metrics have data in any result (skip error results)
   const implsWithResults = implementations.filter(
-    (impl) => results[impl.id]?.median,
+    (impl) => results[impl.id]?.median && !(results[impl.id]!.median as any).error,
   );
   const availableMetrics = METRICS.filter((m) =>
     implsWithResults.some((impl) => {

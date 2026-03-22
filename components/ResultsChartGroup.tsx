@@ -64,15 +64,22 @@ export function ResultsChartGroup({
           <Text variant="labelMedium" style={styles.testName}>
             {test.name}
           </Text>
-          {implementations.map((impl) => {
-            const result = results[impl.id]?.[test.id]?.median;
-            if (!result) return null;
-            const val = getMetricValue(
-              result as unknown as Record<string, unknown>,
-              metricKey,
-            );
-            if (val === undefined) return null;
-
+          {[...implementations]
+            .map((impl) => {
+              const result = results[impl.id]?.[test.id]?.median;
+              if (!result) return null;
+              const val = getMetricValue(
+                result as unknown as Record<string, unknown>,
+                metricKey,
+              );
+              if (val === undefined) return null;
+              return { impl, val };
+            })
+            .filter((x): x is { impl: Implementation; val: number } => x !== null)
+            .sort((a, b) =>
+              metricInfo.higherIsBetter ? b.val - a.val : a.val - b.val,
+            )
+            .map(({ impl, val }) => {
             const barWidth = (Math.abs(val) / globalMax) * 100;
             return (
               <View key={impl.id} style={styles.barRow}>
