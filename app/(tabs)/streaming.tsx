@@ -5,7 +5,8 @@ import { ScrollView, Share, StyleSheet, View } from "react-native";
 import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import type { StreamingBenchmarkResult } from "../../benchmarks/streaming-types";
 import { createStreamingBenchmarks } from "../../benchmarks/streaming";
-import type { BenchmarkStatus } from "../../benchmarks/types";
+import type { BenchmarkStatus, MultiRunResult } from "../../benchmarks/types";
+import { runMultiple } from "../../benchmarks/multi-run";
 import { BenchmarkCard } from "../../components/BenchmarkCard";
 import { ResultsChart } from "../../components/ResultsChart";
 
@@ -25,10 +26,11 @@ export default function StreamingScreen() {
   const [baseUrl, setBaseUrl] = useState(`http://${hostURI}:3001`);
   const [activeImpl, setActiveImpl] = useState<ImplKey>("before");
   const [statuses, setStatuses] = useState<Record<string, BenchmarkStatus>>({});
-  const [results, setResults] = useState<Record<ImplKey, Record<string, StreamingBenchmarkResult>>>({
-    before: {},
-    after: {},
-  });
+  const [results, setResults] = useState<
+    Record<ImplKey, Record<string, MultiRunResult<StreamingBenchmarkResult>>>
+  >({ before: {}, after: {} });
+  const [runCount, setRunCount] = useState(3);
+  const [runProgress, setRunProgress] = useState<{ current: number; total: number } | null>(null);
   const [chartMetric, setChartMetric] = useState<"durationMs" | "timeToFirstChunkMs" | "throughputMbPerCc">("durationMs");
 
   const fetchFn = activeImpl === "after" && expoFetchNext ? expoFetchNext : expoFetch;
@@ -36,7 +38,12 @@ export default function StreamingScreen() {
   const allIDs = useMemo(() => new Set(benchmarks.map((b) => b.id)), [benchmarks]);
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<Set<string>>(() => new Set(allIDs));
 
-  const currentResults = results[activeImpl];
+  const currentMultiResults = results[activeImpl];
+  const currentResults = Object.fromEntries(
+    Object.entries(currentMultiResults)
+      .filter(([, mr]) => mr != null)
+      .map(([id, mr]) => [id, mr.median])
+  );
 
   const toggleBenchmark = (id: string) => {
     setSelectedBenchmarks((prev) => {
@@ -49,32 +56,47 @@ export default function StreamingScreen() {
   const runBenchmark = async (id: string) => {
     const benchmark = benchmarks.find((b) => b.id === id);
     if (!benchmark) return;
-
-    setStatuses((prev) => ({ ...prev, [id]: "running" }));
-
     try {
-      const result = await benchmark.run(baseUrl);
+      setStatuses((prev) => ({ ...prev, [id]: "running" }));
       setResults((prev) => ({
         ...prev,
-        [activeImpl]: { ...prev[activeImpl], [id]: result },
+        [activeImpl]: { ...prev[activeImpl], [id]: undefined },
+      }));
+
+      const multiResult = await runMultiple(
+        () => benchmark.run(baseUrl) as Promise<StreamingBenchmarkResult>,
+        {
+          runCount,
+          onProgress: (current, total) => setRunProgress({ current, total }),
+        }
+      );
+
+      setResults((prev) => ({
+        ...prev,
+        [activeImpl]: { ...prev[activeImpl], [id]: multiResult },
       }));
       setStatuses((prev) => ({ ...prev, [id]: "success" }));
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      setStatuses((prev) => ({ ...prev, [id]: "error" }));
       setResults((prev) => ({
         ...prev,
         [activeImpl]: {
           ...prev[activeImpl],
           [id]: {
-            durationMs: 0,
-            sizeBytes: 0,
-            timeToFirstChunkMs: 0,
-            chunkCount: 0,
-            error: message,
+            median: {
+              durationMs: 0,
+              sizeBytes: 0,
+              timeToFirstChunkMs: 0,
+              chunkCount: 0,
+              error: e instanceof Error ? e.message : String(e),
+            },
+            runs: [],
+            runCount: 0,
           },
         },
       }));
-      setStatuses((prev) => ({ ...prev, [id]: "error" }));
+    } finally {
+      setRunProgress(null);
     }
   };
 
@@ -88,9 +110,23 @@ export default function StreamingScreen() {
 
   const exportResults = async () => {
     const data = {
-      device: `${Constants.deviceName ?? "unknown"}`,
+      exportVersion: 2,
+      device: Constants.deviceName ?? "unknown",
       timestamp: new Date().toISOString(),
-      results,
+      runCount,
+      results: Object.fromEntries(
+        Object.entries(results).map(([impl, benchmarks]) => [
+          impl,
+          Object.fromEntries(
+            Object.entries(benchmarks)
+              .filter(([, mr]) => mr != null)
+              .map(([id, mr]) => [
+                id,
+                { median: mr.median, runs: mr.runs, warmUpRun: mr.warmUpRun },
+              ])
+          ),
+        ])
+      ),
     };
     await Share.share({ message: JSON.stringify(data, null, 2) });
   };
@@ -157,6 +193,13 @@ export default function StreamingScreen() {
           </Button>
         </View>
 
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text>Runs:</Text>
+          <Button mode="outlined" compact onPress={() => setRunCount((c) => Math.max(1, c - 1))}>-</Button>
+          <Text>{runCount}</Text>
+          <Button mode="outlined" compact onPress={() => setRunCount((c) => Math.min(10, c + 1))}>+</Button>
+        </View>
+
         <View style={styles.buttonRow}>
           <Button mode="contained" onPress={runAll} icon="play-box-multiple" style={styles.flexButton}>
             Run Selected
@@ -165,6 +208,10 @@ export default function StreamingScreen() {
             Export
           </Button>
         </View>
+
+        {runProgress && (
+          <Text style={{ textAlign: "center" }}>Run {runProgress.current}/{runProgress.total}</Text>
+        )}
       </View>
 
       {benchmarks.map((b) => (
@@ -172,7 +219,7 @@ export default function StreamingScreen() {
           key={b.id}
           benchmark={b}
           status={statuses[b.id] || "idle"}
-          result={currentResults[b.id]}
+          result={currentMultiResults[b.id]?.median}
           onRun={() => runBenchmark(b.id)}
           isSelected={selectedBenchmarks.has(b.id)}
           onToggle={() => toggleBenchmark(b.id)}
