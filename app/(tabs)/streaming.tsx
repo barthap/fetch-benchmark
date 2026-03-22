@@ -1,46 +1,39 @@
+// app/(tabs)/streaming.tsx
 import Constants from "expo-constants";
-import { fetch as expoFetch } from "expo/fetch";
 import { useState, useMemo } from "react";
 import { ScrollView, Share, StyleSheet, View } from "react-native";
-import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
+import { Button, Text, TextInput } from "react-native-paper";
+import { streamingTests, streamingImplementations } from "../../benchmarks/streaming";
 import type { StreamingBenchmarkResult } from "../../benchmarks/streaming-types";
-import { createStreamingBenchmarks } from "../../benchmarks/streaming";
-import type { BenchmarkStatus, MultiRunResult } from "../../benchmarks/types";
+import type { BenchmarkStatus, Benchmark, MultiRunResult } from "../../benchmarks/types";
 import { runMultiple } from "../../benchmarks/multi-run";
 import { BenchmarkCard } from "../../components/BenchmarkCard";
 import { ResultsChart } from "../../components/ResultsChart";
 
 const hostURI = Constants.expoConfig?.hostUri?.split(":")?.[0] ?? "localhost";
 
-type ImplKey = "before" | "after";
+// Temporary bridge: flatten to old Benchmark[] shape
+const enabledImpls = streamingImplementations.filter((i) => i.enabled);
+const benchmarks: Benchmark[] = streamingTests.map((test) => ({
+  id: test.id,
+  name: test.name,
+  description: test.description,
+  category: "Streaming",
+  run: (baseUrl: string) => test.run(enabledImpls[0], baseUrl),
+}));
 
-// Try to import the "after" module; fall back to undefined if not installed
-let expoFetchNext: typeof expoFetch | undefined;
-try {
-  expoFetchNext = require("expo-fetch-next/fetch").fetch;
-} catch {
-  // Module not installed yet — "After" option will be disabled
-}
+const allIDs = new Set(benchmarks.map((b) => b.id));
 
 export default function StreamingScreen() {
   const [baseUrl, setBaseUrl] = useState(`http://${hostURI}:3001`);
-  const [activeImpl, setActiveImpl] = useState<ImplKey>("before");
   const [statuses, setStatuses] = useState<Record<string, BenchmarkStatus>>({});
-  const [results, setResults] = useState<
-    Record<ImplKey, Record<string, MultiRunResult<StreamingBenchmarkResult>>>
-  >({ before: {}, after: {} });
+  const [results, setResults] = useState<Record<string, MultiRunResult<StreamingBenchmarkResult>>>({});
   const [runCount, setRunCount] = useState(3);
   const [runProgress, setRunProgress] = useState<{ current: number; total: number } | null>(null);
-  const [chartMetric, setChartMetric] = useState<"durationMs" | "timeToFirstChunkMs" | "throughputMbPerCc">("durationMs");
-
-  const fetchFn = activeImpl === "after" && expoFetchNext ? expoFetchNext : expoFetch;
-  const benchmarks = useMemo(() => createStreamingBenchmarks(fetchFn), [fetchFn]);
-  const allIDs = useMemo(() => new Set(benchmarks.map((b) => b.id)), [benchmarks]);
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<Set<string>>(() => new Set(allIDs));
 
-  const currentMultiResults = results[activeImpl];
   const currentResults = Object.fromEntries(
-    Object.entries(currentMultiResults)
+    Object.entries(results)
       .filter(([, mr]) => mr != null)
       .map(([id, mr]) => [id, mr.median])
   );
@@ -58,10 +51,11 @@ export default function StreamingScreen() {
     if (!benchmark) return;
     try {
       setStatuses((prev) => ({ ...prev, [id]: "running" }));
-      setResults((prev) => ({
-        ...prev,
-        [activeImpl]: { ...prev[activeImpl], [id]: undefined },
-      }));
+      setResults((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
 
       const multiResult = await runMultiple(
         () => benchmark.run(baseUrl) as Promise<StreamingBenchmarkResult>,
@@ -71,28 +65,22 @@ export default function StreamingScreen() {
         }
       );
 
-      setResults((prev) => ({
-        ...prev,
-        [activeImpl]: { ...prev[activeImpl], [id]: multiResult },
-      }));
+      setResults((prev) => ({ ...prev, [id]: multiResult }));
       setStatuses((prev) => ({ ...prev, [id]: "success" }));
     } catch (e) {
       setStatuses((prev) => ({ ...prev, [id]: "error" }));
       setResults((prev) => ({
         ...prev,
-        [activeImpl]: {
-          ...prev[activeImpl],
-          [id]: {
-            median: {
-              durationMs: 0,
-              sizeBytes: 0,
-              timeToFirstChunkMs: 0,
-              chunkCount: 0,
-              error: e instanceof Error ? e.message : String(e),
-            },
-            runs: [],
-            runCount: 0,
+        [id]: {
+          median: {
+            durationMs: 0,
+            sizeBytes: 0,
+            timeToFirstChunkMs: 0,
+            chunkCount: 0,
+            error: e instanceof Error ? e.message : String(e),
           },
+          runs: [],
+          runCount: 0,
         },
       }));
     } finally {
@@ -117,36 +105,20 @@ export default function StreamingScreen() {
       benchmarkAppVersion: Constants.expoConfig?.version ?? "unknown",
       runCount,
       results: Object.fromEntries(
-        Object.entries(results).map(([impl, benchmarks]) => [
-          impl,
-          Object.fromEntries(
-            Object.entries(benchmarks)
-              .filter(([, mr]) => mr != null)
-              .map(([id, mr]) => [
-                id,
-                { median: mr.median, runs: mr.runs, warmUpRun: mr.warmUpRun },
-              ])
-          ),
-        ])
+        Object.entries(results)
+          .filter(([, mr]) => mr != null)
+          .map(([id, mr]) => [
+            id,
+            { median: mr.median, runs: mr.runs, warmUpRun: mr.warmUpRun },
+          ])
       ),
     };
     await Share.share({ message: JSON.stringify(data, null, 2) });
   };
 
-  const metricButtons = [
-    { value: "durationMs", label: "Duration" },
-    { value: "timeToFirstChunkMs", label: "TTFC" },
-    { value: "throughputMbPerCc", label: "Throughput" },
-  ];
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <ResultsChart
-        benchmarks={benchmarks}
-        results={currentResults}
-        title={`Streaming Results (${activeImpl})`}
-        metricKey={chartMetric}
-      />
+      <ResultsChart benchmarks={benchmarks} results={currentResults} />
 
       <View style={styles.controls}>
         <TextInput
@@ -157,25 +129,6 @@ export default function StreamingScreen() {
           style={styles.input}
           autoCapitalize="none"
           keyboardType="url"
-        />
-
-        <SegmentedButtons
-          value={activeImpl}
-          onValueChange={(v) => setActiveImpl(v as ImplKey)}
-          buttons={[
-            { value: "before", label: "Before (stock)" },
-            {
-              value: "after",
-              label: "After (patched)",
-              disabled: !expoFetchNext,
-            },
-          ]}
-        />
-
-        <SegmentedButtons
-          value={chartMetric}
-          onValueChange={(v) => setChartMetric(v as typeof chartMetric)}
-          buttons={metricButtons}
         />
 
         <View style={styles.buttonRow}>
@@ -221,7 +174,7 @@ export default function StreamingScreen() {
           key={b.id}
           benchmark={b}
           status={statuses[b.id] || "idle"}
-          result={currentMultiResults[b.id]?.median}
+          result={results[b.id]?.median}
           onRun={() => runBenchmark(b.id)}
           isSelected={selectedBenchmarks.has(b.id)}
           onToggle={() => toggleBenchmark(b.id)}
