@@ -7,7 +7,7 @@ Reorganize the fetch-benchmark app's code and UI around two first-class concepts
 ## Background
 
 Current pain points:
-- `benchmarks/index.ts` duplicates 5 test definitions × 3 categories (15 benchmark objects with copy-pasted logic)
+- `benchmarks/index.ts` duplicates 5 test definitions × 3 categories + 1 special variant (16 benchmark objects with copy-pasted logic)
 - Streaming tab hardcodes "before"/"after" as the only two implementations, making a 3rd awkward to add
 - The UI displays a flat list of results with no cross-implementation comparison
 - Category selection is radio-based (streaming) — only one implementation visible at a time
@@ -20,7 +20,7 @@ Two phases in a single implementation plan:
 ```
 Phase 1: Code organization
   -> Shared Implementation/TestDefinition types
-  -> Whole-body: 5 tests defined once, 3 implementations injected
+  -> Whole-body: 5 tests defined once, 4 implementations injected
   -> Streaming: refactor to same pattern, proper implementation labels
   -> Results keyed as Record<implId, Record<testId, MultiRunResult>>
 
@@ -70,21 +70,25 @@ type ResultsMap<T extends BenchmarkResult = BenchmarkResult> =
 
 **File: `benchmarks/whole-body.ts`** (new, replaces `benchmarks/index.ts`)
 
-Define 5 test definitions once. Each test's `run` function receives an `Implementation` and uses `impl.fetchFn`:
+Define 5 test definitions once. Each test's `run` function receives an `Implementation` and uses `impl.fetchFn`. The existing `makeBenchmark` helper is adapted to accept an `Implementation` parameter — it continues to handle prefetch/run separation, `measurePrefetchTime`, size extraction from `Content-Length`, and throughput calculation. Tests don't re-implement this logic.
 
 ```typescript
-const jsonTest: TestDefinition = {
+// Helper adapted from existing makeBenchmark — handles timing, size, throughput
+function makeTest(config: {
+  id: string;
+  name: string;
+  description: string;
+  prefetch?: (impl: Implementation, url: string) => Promise<Response>; // defaults to impl.fetchFn(url)
+  run: (response: Response) => Promise<void>;
+  measurePrefetchTime?: boolean;
+}): TestDefinition;
+
+const jsonTest = makeTest({
   id: "json",
   name: "res.json()",
   description: "Parse JSON from response body",
-  run: async (impl, url) => {
-    const start = performance.now();
-    const response = await impl.fetchFn(url);
-    const data = await response.json();
-    const duration = performance.now() - start;
-    return { durationMs: duration, sizeBytes: /* ... */ };
-  },
-};
+  run: async (response) => { await response.json(); },
+});
 
 export const wholeBodyTests: TestDefinition[] = [
   jsonTest, textTest, textJsonParseTest, arrayBufferTest, textEncoderTest
@@ -118,7 +122,9 @@ export const wholeBodyImplementations: Implementation[] = [
 ];
 ```
 
-The `makeBenchmark` helper and its prefetch pattern may remain as internal helpers within test definitions, but the external interface is always `(impl, url) => Promise<BenchmarkResult>`.
+The adapted `makeTest` helper wraps the prefetch/run pattern internally. The external interface is always `TestDefinition.run(impl, url) => Promise<BenchmarkResult>`.
+
+**Note on `expo-fetch-next` arrayBuffer test**: The current codebase has a 6th test (`[EXPO NEXT] res.arrayBuffer()`) that uses `expoFetchNext` as its fetch function. Under the new model, `expoFetchNext` becomes a 4th implementation (`id: "expo-next"`, `shortLabel: "ExpoNext"`, `color: "#9b59b6"`) rather than a separate test definition. The arrayBuffer test definition is shared across all implementations including this one.
 
 **Delete: `benchmarks/index.ts`** — fully replaced.
 
@@ -206,11 +212,12 @@ Both tabs share the same vertical layout:
 - Each section: test name header, then one horizontal bar per selected implementation
 - Implementation labels truncated to `shortLabel` (≤10 chars, monospace)
 - Bar colors match `impl.color`
-- Bars sorted by metric value
+- Bars sorted by metric value (ascending for "lower is better" metrics like `durationMs`, descending for "higher is better" metrics like `throughputMbPerCc`)
+- Metric extraction uses a runtime key accessor: `(result as Record<string, number>)[metricKey]`. A metric registry maps each key to its display name, unit, and sort direction.
 
 **`components/BenchmarkCard.tsx`** (rewritten)
 - Represents a single `TestDefinition`, not a test+impl combo
-- Header: checkbox + test name + description + status indicator
+- Header: checkbox (controls membership in `selectedTests`) + test name + description + status indicator
 - Status: idle / "● Expo 2/3…" / "Done" / error
 - Expandable: tap to reveal transposed results mini-table
 - Mini-table layout (mobile):
@@ -233,11 +240,12 @@ const [results, setResults] = useState<ResultsMap<T>>({});
 const [chartMetric, setChartMetric] = useState<string>("durationMs");
 const [runCount, setRunCount] = useState(3);
 const [runningState, setRunningState] = useState<{
-  testId: string;
-  implId: string;
-  run: number;
-  total: number;
+  testId: string;          // which test definition is running
+  implId: string;          // which implementation is running (for label lookup)
+  runIndex: number;        // current run within runMultiple (1-based)
+  runCount: number;        // total runs in runMultiple
 } | null>(null);
+// Card displays: "● {impl.shortLabel} {runIndex}/{runCount}…"
 ```
 
 ### 2d. Run Execution
@@ -252,11 +260,11 @@ Order: iterate tests in outer loop, implementations in inner loop. This groups a
 
 ### 2e. JSON Export
 
-Same `exportVersion: 2` format, but now both screens export with implementation grouping:
+Bump to `exportVersion: 3` (the current v2 format uses a different results structure). Both screens now export with implementation grouping:
 
 ```json
 {
-  "exportVersion": 2,
+  "exportVersion": 3,
   "device": "...",
   "timestamp": "...",
   "runCount": 3,
@@ -308,3 +316,5 @@ Enforce a single color mode (dark) to avoid contrast issues with the current rea
 - **Metric availability**: Not all metrics exist on all results. Chart metric selector should only offer metrics that at least one result contains. Card mini-tables skip rows for missing metrics.
 - **Mobile constraints**: Chart implementation labels use `shortLabel` (≤10 chars, monospace). Card mini-tables are transposed (impls as columns, metrics as rows) to fit mobile width.
 - **Web viewer uses wide layout**: The standalone `tools/results-viewer.html` uses the non-transposed layout (impls as rows) since it runs on desktop browsers.
+- **Cancellation**: No abort mechanism for in-progress benchmark suites. Out of scope for this redesign. Navigating away mid-run may leave state inconsistent — acceptable for a dev tool.
+- **Streaming endpoint in test definitions**: Each streaming test hardcodes its endpoint path (e.g., `/chunked?size=50mb`) inside its `run` function. This is intentional — the endpoint is part of the test's identity, not a separate concern. Minor duplication is acceptable.
