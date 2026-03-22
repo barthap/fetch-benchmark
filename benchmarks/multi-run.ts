@@ -34,7 +34,7 @@ export async function runMultiple<T extends BenchmarkResult>(
     }
   }
 
-  // Pick median by durationMs
+  // Pick median by durationMs. For even counts, picks lower-middle (no averaging).
   const sorted = [...runs].sort((a, b) => a.durationMs - b.durationMs);
   const medianIndex = Math.floor(sorted.length / 2);
   const median = sorted[medianIndex];

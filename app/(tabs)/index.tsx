@@ -75,6 +75,8 @@ export default function HomeScreen() {
       exportVersion: 2,
       device: Constants.deviceName ?? "unknown",
       timestamp: new Date().toISOString(),
+      expoFetchVersion: Constants.expoConfig?.extra?.expoFetchVersion ?? "unknown",
+      benchmarkAppVersion: Constants.expoConfig?.version ?? "unknown",
       runCount,
       results: Object.fromEntries(
         Object.entries(results).map(([id, mr]) => [
