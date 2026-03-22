@@ -56,7 +56,7 @@ export function BenchmarkCard({
   const availableMetrics = METRICS.filter((m) =>
     implsWithResults.some((impl) => {
       const val = getMetricValue(
-        results[impl.id]!.median as Record<string, unknown>,
+        results[impl.id]!.median as unknown as Record<string, unknown>,
         m.key,
       );
       return val !== undefined;
@@ -69,7 +69,7 @@ export function BenchmarkCard({
     let bestVal: number | undefined;
     for (const impl of implsWithResults) {
       const val = getMetricValue(
-        results[impl.id]!.median as Record<string, unknown>,
+        results[impl.id]!.median as unknown as Record<string, unknown>,
         metricKey,
       );
       if (val === undefined) continue;
@@ -154,7 +154,7 @@ export function BenchmarkCard({
                 </View>
                 {implsWithResults.map((impl) => {
                   const val = getMetricValue(
-                    results[impl.id]!.median as Record<string, unknown>,
+                    results[impl.id]!.median as unknown as Record<string, unknown>,
                     metric.key,
                   );
                   const isBest = impl.id === bestId && implsWithResults.length > 1;

@@ -27,7 +27,7 @@ export function ResultsChartGroup({
     for (const impl of implementations) {
       const result = results[impl.id]?.[test.id]?.median;
       if (result) {
-        const val = getMetricValue(result as Record<string, unknown>, metricKey);
+        const val = getMetricValue(result as unknown as Record<string, unknown>, metricKey);
         if (val !== undefined && Math.abs(val) > globalMax) {
           globalMax = Math.abs(val);
         }
@@ -43,7 +43,7 @@ export function ResultsChartGroup({
       (impl) =>
         results[impl.id]?.[test.id]?.median &&
         getMetricValue(
-          results[impl.id][test.id].median as Record<string, unknown>,
+          results[impl.id][test.id].median as unknown as Record<string, unknown>,
           metricKey,
         ) !== undefined,
     ),
@@ -68,7 +68,7 @@ export function ResultsChartGroup({
             const result = results[impl.id]?.[test.id]?.median;
             if (!result) return null;
             const val = getMetricValue(
-              result as Record<string, unknown>,
+              result as unknown as Record<string, unknown>,
               metricKey,
             );
             if (val === undefined) return null;
