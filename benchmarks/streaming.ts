@@ -38,7 +38,8 @@ export const streamingTests: TestDefinition<StreamingBenchmarkResult>[] = [
     run: async (impl, baseUrl): Promise<StreamingBenchmarkResult> => {
       const url = `${baseUrl}/sse`;
       const fetchStart = performance.now();
-      const response = await impl.fetchFn(url);
+      // @ts-expect-error nitro does require this argument for some reason
+      const response = await impl.fetchFn(url, { stream: true });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -79,8 +80,7 @@ export const streamingTests: TestDefinition<StreamingBenchmarkResult>[] = [
         deltas.push(tokenTimes[i] - tokenTimes[i - 1]);
       }
       deltas.sort((a, b) => a - b);
-      const medianInterTokenMs =
-        deltas.length > 0 ? deltas[Math.floor(deltas.length / 2)] : 0;
+      const medianInterTokenMs = deltas.length > 0 ? deltas[Math.floor(deltas.length / 2)] : 0;
 
       return {
         durationMs: Math.round(durationMs),
@@ -109,7 +109,8 @@ export const streamingTests: TestDefinition<StreamingBenchmarkResult>[] = [
       let firstChunkGlobal: number | undefined;
 
       async function drainOne(): Promise<{ bytes: number; chunks: number }> {
-        const response = await impl.fetchFn(url);
+        // @ts-expect-error nitro does require this argument for some reason
+        const response = await impl.fetchFn(url, { stream: true });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -132,9 +133,7 @@ export const streamingTests: TestDefinition<StreamingBenchmarkResult>[] = [
       const durationMs = endTime - fetchStart;
       const totalBytes = results.reduce((sum, r) => sum + r.bytes, 0);
       const totalChunks = results.reduce((sum, r) => sum + r.chunks, 0);
-      const ttfc = firstChunkGlobal
-        ? firstChunkGlobal - fetchStart
-        : durationMs;
+      const ttfc = firstChunkGlobal ? firstChunkGlobal - fetchStart : durationMs;
 
       return {
         durationMs: Math.round(durationMs),
@@ -152,10 +151,7 @@ export const streamingTests: TestDefinition<StreamingBenchmarkResult>[] = [
     run: async (impl, baseUrl): Promise<StreamingBenchmarkResult> => {
       const counter = createFrameDropCounter();
       counter.start();
-      const result = await drainStream(
-        impl.fetchFn,
-        `${baseUrl}/chunked?size=50mb`,
-      );
+      const result = await drainStream(impl.fetchFn, `${baseUrl}/chunked?size=50mb`);
       const { droppedFrames } = counter.stop();
       return { ...result, droppedFrames };
     },
@@ -166,6 +162,14 @@ export const streamingTests: TestDefinition<StreamingBenchmarkResult>[] = [
 let expoFetchNext: typeof expoFetch | undefined;
 try {
   expoFetchNext = require("expo-fetch-next/fetch").fetch;
+} catch {
+  // Not installed
+}
+
+// Try to import nitro-fetch; may not be installed
+let nitroFetchFn: typeof fetch | undefined;
+try {
+  nitroFetchFn = require("react-native-nitro-fetch").fetch;
 } catch {
   // Not installed
 }
@@ -186,5 +190,13 @@ export const streamingImplementations: Implementation[] = [
     color: "#3498db",
     fetchFn: expoFetchNext ?? expoFetch,
     enabled: !!expoFetchNext,
+  },
+  {
+    id: "nitro",
+    label: "Nitro Fetch",
+    shortLabel: "Nitro",
+    color: "#2ecc71",
+    fetchFn: nitroFetchFn ?? globalThis.fetch,
+    enabled: !!nitroFetchFn,
   },
 ];

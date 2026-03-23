@@ -6,7 +6,8 @@ export async function drainStream(
   url: string,
 ): Promise<StreamingBenchmarkResult> {
   const fetchStart = performance.now();
-  const response = await fetchFn(url);
+  // @ts-expect-error nitro does require this argument for some reason
+  const response = await fetchFn(url, { stream: true });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
