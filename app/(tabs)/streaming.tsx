@@ -1,183 +1,281 @@
+// app/(tabs)/streaming.tsx
 import Constants from "expo-constants";
-import { fetch as expoFetch } from "expo/fetch";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { ScrollView, Share, StyleSheet, View } from "react-native";
-import { Button, SegmentedButtons, Text, TextInput } from "react-native-paper";
+import { Button, Text, TextInput, useTheme } from "react-native-paper";
+import {
+  streamingTests,
+  streamingImplementations,
+} from "../../benchmarks/streaming";
+import type { ResultsMap } from "../../benchmarks/implementation";
 import type { StreamingBenchmarkResult } from "../../benchmarks/streaming-types";
-import { createStreamingBenchmarks } from "../../benchmarks/streaming";
-import type { BenchmarkStatus } from "../../benchmarks/types";
+import { METRICS } from "../../benchmarks/metrics";
+import { runMultiple } from "../../benchmarks/multi-run";
 import { BenchmarkCard } from "../../components/BenchmarkCard";
-import { ResultsChart } from "../../components/ResultsChart";
+import { ImplementationSelector } from "../../components/ImplementationSelector";
+import { MetricSelector } from "../../components/MetricSelector";
+import { ResultsChartGroup } from "../../components/ResultsChartGroup";
 
-const hostURI = Constants.expoConfig?.hostUri?.split(":")?.[0] ?? "localhost";
+const hostURI =
+  Constants.expoConfig?.hostUri?.split(":")?.[0] ?? "localhost";
 
-type ImplKey = "before" | "after";
-
-// Try to import the "after" module; fall back to undefined if not installed
-let expoFetchNext: typeof expoFetch | undefined;
-try {
-  expoFetchNext = require("expo-fetch-next/fetch").fetch;
-} catch {
-  // Module not installed yet — "After" option will be disabled
-}
+const streamingMetrics = METRICS.filter((m) =>
+  [
+    "durationMs",
+    "timeToFirstChunkMs",
+    "throughputMbPerCc",
+    "chunkCount",
+    "droppedFrames",
+    "medianInterTokenMs",
+    "memoryDeltaBytes",
+    "jsThreadCpuMs",
+  ].includes(m.key),
+);
 
 export default function StreamingScreen() {
+  const theme = useTheme();
   const [baseUrl, setBaseUrl] = useState(`http://${hostURI}:3001`);
-  const [activeImpl, setActiveImpl] = useState<ImplKey>("before");
-  const [statuses, setStatuses] = useState<Record<string, BenchmarkStatus>>({});
-  const [results, setResults] = useState<Record<ImplKey, Record<string, StreamingBenchmarkResult>>>({
-    before: {},
-    after: {},
-  });
-  const [chartMetric, setChartMetric] = useState<"durationMs" | "timeToFirstChunkMs" | "throughputMbPerCc">("durationMs");
+  const [runCount, setRunCount] = useState(3);
+  const [chartMetric, setChartMetric] = useState("durationMs");
 
-  const fetchFn = activeImpl === "after" && expoFetchNext ? expoFetchNext : expoFetch;
-  const benchmarks = useMemo(() => createStreamingBenchmarks(fetchFn), [fetchFn]);
-  const allIDs = useMemo(() => new Set(benchmarks.map((b) => b.id)), [benchmarks]);
-  const [selectedBenchmarks, setSelectedBenchmarks] = useState<Set<string>>(() => new Set(allIDs));
+  const [selectedTests, setSelectedTests] = useState<Set<string>>(
+    () => new Set(streamingTests.map((t) => t.id)),
+  );
+  const [selectedImpls, setSelectedImpls] = useState<Set<string>>(
+    () =>
+      new Set(
+        streamingImplementations
+          .filter((i) => i.enabled)
+          .map((i) => i.id),
+      ),
+  );
 
-  const currentResults = results[activeImpl];
+  const [results, setResults] =
+    useState<ResultsMap<StreamingBenchmarkResult>>({});
+  const [runningState, setRunningState] = useState<{
+    testId: string;
+    implId: string;
+    runIndex: number;
+    runCount: number;
+  } | null>(null);
 
-  const toggleBenchmark = (id: string) => {
-    setSelectedBenchmarks((prev) => {
-      const items = new Set(prev);
-      items.has(id) ? items.delete(id) : items.add(id);
-      return items;
+  const toggleTest = (id: string) => {
+    setSelectedTests((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
   };
 
-  const runBenchmark = async (id: string) => {
-    const benchmark = benchmarks.find((b) => b.id === id);
-    if (!benchmark) return;
-
-    setStatuses((prev) => ({ ...prev, [id]: "running" }));
-
-    try {
-      const result = await benchmark.run(baseUrl);
-      setResults((prev) => ({
-        ...prev,
-        [activeImpl]: { ...prev[activeImpl], [id]: result },
-      }));
-      setStatuses((prev) => ({ ...prev, [id]: "success" }));
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      setResults((prev) => ({
-        ...prev,
-        [activeImpl]: {
-          ...prev[activeImpl],
-          [id]: {
-            durationMs: 0,
-            sizeBytes: 0,
-            timeToFirstChunkMs: 0,
-            chunkCount: 0,
-            error: message,
-          },
-        },
-      }));
-      setStatuses((prev) => ({ ...prev, [id]: "error" }));
-    }
+  const toggleImpl = (id: string) => {
+    setSelectedImpls((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
 
   const runAll = async () => {
-    for (const b of benchmarks) {
-      if (selectedBenchmarks.has(b.id)) {
-        await runBenchmark(b.id);
+    const tests = streamingTests.filter((t) => selectedTests.has(t.id));
+    const impls = streamingImplementations.filter(
+      (i) => i.enabled && selectedImpls.has(i.id),
+    );
+
+    for (const test of tests) {
+      for (const impl of impls) {
+        try {
+          setRunningState({
+            testId: test.id,
+            implId: impl.id,
+            runIndex: 0,
+            runCount,
+          });
+
+          const multiResult = await runMultiple(
+            () =>
+              test.run(impl, baseUrl) as Promise<StreamingBenchmarkResult>,
+            {
+              runCount,
+              onProgress: (current, total) =>
+                setRunningState({
+                  testId: test.id,
+                  implId: impl.id,
+                  runIndex: current,
+                  runCount: total,
+                }),
+            },
+          );
+
+          setResults((prev) => ({
+            ...prev,
+            [impl.id]: {
+              ...prev[impl.id],
+              [test.id]: multiResult,
+            },
+          }));
+        } catch (e) {
+          setResults((prev) => ({
+            ...prev,
+            [impl.id]: {
+              ...prev[impl.id],
+              [test.id]: {
+                median: {
+                  durationMs: 0,
+                  sizeBytes: 0,
+                  timeToFirstChunkMs: 0,
+                  chunkCount: 0,
+                  error: e instanceof Error ? e.message : String(e),
+                },
+                runs: [],
+                runCount: 0,
+              },
+            },
+          }));
+        }
       }
     }
+    setRunningState(null);
   };
 
   const exportResults = async () => {
     const data = {
-      device: `${Constants.deviceName ?? "unknown"}`,
+      exportVersion: 3,
+      device: Constants.deviceName ?? "unknown",
       timestamp: new Date().toISOString(),
+      expoFetchVersion:
+        Constants.expoConfig?.extra?.expoFetchVersion ?? "unknown",
+      benchmarkAppVersion: Constants.expoConfig?.version ?? "unknown",
+      runCount,
       results,
     };
     await Share.share({ message: JSON.stringify(data, null, 2) });
   };
 
-  const metricButtons = [
-    { value: "durationMs", label: "Duration" },
-    { value: "timeToFirstChunkMs", label: "TTFC" },
-    { value: "throughputMbPerCc", label: "Throughput" },
-  ];
+  const hasAnyResults = Object.keys(results).length > 0;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <ResultsChart
-        benchmarks={benchmarks}
-        results={currentResults}
-        title={`Streaming Results (${activeImpl})`}
-        metricKey={chartMetric}
-      />
-
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={styles.content}
+    >
+      {/* Config Bar */}
       <View style={styles.controls}>
         <TextInput
           label="Server URL"
           value={baseUrl}
           onChangeText={setBaseUrl}
           mode="outlined"
-          style={styles.input}
           autoCapitalize="none"
           keyboardType="url"
         />
-
-        <SegmentedButtons
-          value={activeImpl}
-          onValueChange={(v) => setActiveImpl(v as ImplKey)}
-          buttons={[
-            { value: "before", label: "Before (stock)" },
-            {
-              value: "after",
-              label: "After (patched)",
-              disabled: !expoFetchNext,
-            },
-          ]}
-        />
-
-        <SegmentedButtons
-          value={chartMetric}
-          onValueChange={(v) => setChartMetric(v as typeof chartMetric)}
-          buttons={metricButtons}
-        />
-
-        <View style={styles.buttonRow}>
+        <View style={styles.row}>
+          <Text>Runs:</Text>
           <Button
-            mode="contained-tonal"
-            onPress={() => setSelectedBenchmarks(new Set(allIDs))}
-            style={styles.flexButton}
+            mode="outlined"
+            compact
+            onPress={() => setRunCount((c) => Math.max(1, c - 1))}
           >
-            Select All
+            -
           </Button>
+          <Text>{runCount}</Text>
           <Button
-            mode="contained-tonal"
-            onPress={() => setSelectedBenchmarks(new Set())}
-            style={styles.flexButton}
+            mode="outlined"
+            compact
+            onPress={() => setRunCount((c) => Math.min(10, c + 1))}
           >
-            Deselect All
+            +
           </Button>
         </View>
-
-        <View style={styles.buttonRow}>
-          <Button mode="contained" onPress={runAll} icon="play-box-multiple" style={styles.flexButton}>
-            Run Selected
-          </Button>
-          <Button mode="outlined" onPress={exportResults} icon="export-variant" style={styles.flexButton}>
-            Export
-          </Button>
-        </View>
+        <MetricSelector
+          metrics={streamingMetrics}
+          selected={chartMetric}
+          onSelect={setChartMetric}
+        />
       </View>
 
-      {benchmarks.map((b) => (
-        <BenchmarkCard
-          key={b.id}
-          benchmark={b}
-          status={statuses[b.id] || "idle"}
-          result={currentResults[b.id]}
-          onRun={() => runBenchmark(b.id)}
-          isSelected={selectedBenchmarks.has(b.id)}
-          onToggle={() => toggleBenchmark(b.id)}
+      {/* Charts */}
+      {hasAnyResults && (
+        <ResultsChartGroup
+          tests={streamingTests}
+          implementations={streamingImplementations.filter(
+            (i) => selectedImpls.has(i.id) && i.enabled,
+          )}
+          results={results}
+          metricKey={chartMetric}
         />
-      ))}
+      )}
+
+      {/* Implementations */}
+      <ImplementationSelector
+        implementations={streamingImplementations}
+        selected={selectedImpls}
+        onToggle={toggleImpl}
+      />
+
+      {/* Run Controls */}
+      <View style={styles.buttonRow}>
+        <Button
+          mode="contained"
+          onPress={runAll}
+          icon="play-box-multiple"
+          style={styles.flexButton}
+          disabled={runningState !== null}
+        >
+          {runningState ? "Running\u2026" : "Run Selected"}
+        </Button>
+        <Button
+          mode="contained-tonal"
+          onPress={() =>
+            setSelectedTests(new Set(streamingTests.map((t) => t.id)))
+          }
+          style={styles.flexButton}
+        >
+          Select All
+        </Button>
+        <Button
+          mode="contained-tonal"
+          onPress={() => setSelectedTests(new Set())}
+          style={styles.flexButton}
+        >
+          Deselect
+        </Button>
+        <Button
+          mode="outlined"
+          onPress={exportResults}
+          icon="export-variant"
+          style={styles.flexButton}
+        >
+          Export
+        </Button>
+      </View>
+
+      {/* Test Cards */}
+      {streamingTests.map((test) => {
+        const testResults: Record<string, any> = {};
+        for (const impl of streamingImplementations) {
+          if (results[impl.id]?.[test.id]) {
+            testResults[impl.id] = results[impl.id][test.id];
+          }
+        }
+        const hasResult = Object.keys(testResults).length > 0;
+
+        return (
+          <BenchmarkCard
+            key={test.id}
+            testId={test.id}
+            testName={test.name}
+            testDescription={test.description}
+            implementations={streamingImplementations}
+            results={testResults}
+            isSelected={selectedTests.has(test.id)}
+            onToggle={() => toggleTest(test.id)}
+            runningState={
+              runningState?.testId === test.id ? runningState : null
+            }
+            hasAnyResult={hasResult}
+          />
+        );
+      })}
     </ScrollView>
   );
 }
@@ -185,22 +283,24 @@ export default function StreamingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
   },
   content: {
     padding: 16,
     paddingBottom: 40,
   },
   controls: {
-    marginBottom: 20,
-    gap: 12,
+    marginBottom: 16,
+    gap: 10,
   },
-  input: {
-    backgroundColor: "white",
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   buttonRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
+    marginVertical: 12,
   },
   flexButton: {
     flex: 1,

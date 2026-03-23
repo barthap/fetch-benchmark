@@ -1,49 +1,45 @@
-import type { StreamingBenchmarkDef, StreamingBenchmarkResult, FetchFn, StreamingBenchmark } from "./streaming-types";
-import { makeStreamingBenchmark, drainStream, createFrameDropCounter } from "./streaming-utils";
+// benchmarks/streaming.ts
+import { fetch as expoFetch } from "expo/fetch";
+
+import type { Implementation, TestDefinition } from "./implementation";
+import type { StreamingBenchmarkResult } from "./streaming-types";
+import { drainStream, createFrameDropCounter } from "./streaming-utils";
 import { calculateThroughput } from "./utils";
 
-const streamingBenchmarkDefs: StreamingBenchmarkDef[] = [
+export const streamingTests: TestDefinition<StreamingBenchmarkResult>[] = [
   {
     id: "stream-drain-1mb",
     name: "Stream drain 1MB",
-    category: "Streaming",
     description: "Drain ReadableStream, 1MB payload",
-    endpoint: "/chunked?size=1mb",
-    run: (fetchFn, url) => drainStream(fetchFn, url),
+    run: (impl, baseUrl) => drainStream(impl.fetchFn, `${baseUrl}/chunked?size=1mb`),
   },
   {
     id: "stream-drain-10mb",
     name: "Stream drain 10MB",
-    category: "Streaming",
     description: "Drain ReadableStream, 10MB payload",
-    endpoint: "/chunked?size=10mb",
-    run: (fetchFn, url) => drainStream(fetchFn, url),
+    run: (impl, baseUrl) => drainStream(impl.fetchFn, `${baseUrl}/chunked?size=10mb`),
   },
   {
     id: "stream-drain-50mb",
     name: "Stream drain 50MB",
-    category: "Streaming",
     description: "Drain ReadableStream, 50MB payload (primary)",
-    endpoint: "/chunked?size=50mb",
-    run: (fetchFn, url) => drainStream(fetchFn, url),
+    run: (impl, baseUrl) => drainStream(impl.fetchFn, `${baseUrl}/chunked?size=50mb`),
   },
   {
     id: "stream-drain-100mb",
     name: "Stream drain 100MB",
-    category: "Streaming",
     description: "Drain ReadableStream, 100MB payload",
-    endpoint: "/chunked?size=100mb",
-    run: (fetchFn, url) => drainStream(fetchFn, url),
+    run: (impl, baseUrl) => drainStream(impl.fetchFn, `${baseUrl}/chunked?size=100mb`),
   },
   {
     id: "stream-sse",
     name: "SSE / LLM simulation",
-    category: "Streaming",
     description: "Server-Sent Events with bursty token pattern",
-    endpoint: "/sse",
-    run: async (fetchFn, url): Promise<StreamingBenchmarkResult> => {
+    run: async (impl, baseUrl): Promise<StreamingBenchmarkResult> => {
+      const url = `${baseUrl}/sse`;
       const fetchStart = performance.now();
-      const response = await fetchFn(url);
+      // @ts-expect-error nitro does require this argument for some reason
+      const response = await impl.fetchFn(url, { stream: true });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -84,9 +80,7 @@ const streamingBenchmarkDefs: StreamingBenchmarkDef[] = [
         deltas.push(tokenTimes[i] - tokenTimes[i - 1]);
       }
       deltas.sort((a, b) => a - b);
-      const medianInterTokenMs = deltas.length > 0
-        ? deltas[Math.floor(deltas.length / 2)]
-        : 0;
+      const medianInterTokenMs = deltas.length > 0 ? deltas[Math.floor(deltas.length / 2)] : 0;
 
       return {
         durationMs: Math.round(durationMs),
@@ -101,23 +95,22 @@ const streamingBenchmarkDefs: StreamingBenchmarkDef[] = [
   {
     id: "stream-throttled-10mb",
     name: "Throttled stream 10MB",
-    category: "Streaming",
     description: "Drain 10MB at 1mbps throttle",
-    endpoint: "/chunked?size=10mb&throttle=1mbps",
-    run: (fetchFn, url) => drainStream(fetchFn, url),
+    run: (impl, baseUrl) =>
+      drainStream(impl.fetchFn, `${baseUrl}/chunked?size=10mb&throttle=1mbps`),
   },
   {
     id: "stream-concurrent-3x10mb",
     name: "Concurrent 3x 10MB",
-    category: "Streaming",
     description: "Three parallel 10MB stream drains",
-    endpoint: "/chunked?size=10mb",
-    run: async (fetchFn, url): Promise<StreamingBenchmarkResult> => {
+    run: async (impl, baseUrl): Promise<StreamingBenchmarkResult> => {
+      const url = `${baseUrl}/chunked?size=10mb`;
       const fetchStart = performance.now();
       let firstChunkGlobal: number | undefined;
 
       async function drainOne(): Promise<{ bytes: number; chunks: number }> {
-        const response = await fetchFn(url);
+        // @ts-expect-error nitro does require this argument for some reason
+        const response = await impl.fetchFn(url, { stream: true });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -154,19 +147,56 @@ const streamingBenchmarkDefs: StreamingBenchmarkDef[] = [
   {
     id: "stream-animation-50mb",
     name: "Stream + animation",
-    category: "Streaming",
     description: "50MB drain with frame drop measurement",
-    endpoint: "/chunked?size=50mb",
-    run: async (fetchFn, url): Promise<StreamingBenchmarkResult> => {
+    run: async (impl, baseUrl): Promise<StreamingBenchmarkResult> => {
       const counter = createFrameDropCounter();
       counter.start();
-      const result = await drainStream(fetchFn, url);
+      const result = await drainStream(impl.fetchFn, `${baseUrl}/chunked?size=50mb`);
       const { droppedFrames } = counter.stop();
       return { ...result, droppedFrames };
     },
   },
 ];
 
-export function createStreamingBenchmarks(fetchFn: FetchFn): StreamingBenchmark[] {
-  return streamingBenchmarkDefs.map((def) => makeStreamingBenchmark(def, fetchFn));
+// Try to import expo-fetch-next; may not be installed
+let expoFetchNext: typeof expoFetch | undefined;
+try {
+  expoFetchNext = require("expo-fetch-next/fetch").fetch;
+} catch {
+  // Not installed
 }
+
+// Try to import nitro-fetch; may not be installed
+let nitroFetchFn: typeof fetch | undefined;
+try {
+  nitroFetchFn = require("react-native-nitro-fetch").fetch;
+} catch {
+  // Not installed
+}
+
+export const streamingImplementations: Implementation[] = [
+  {
+    id: "stock",
+    label: "Stock Expo Fetch",
+    shortLabel: "Stock",
+    color: "#e74c3c",
+    fetchFn: expoFetch,
+    enabled: true,
+  },
+  {
+    id: "patched",
+    label: "Patched Expo Fetch",
+    shortLabel: "Patched",
+    color: "#3498db",
+    fetchFn: expoFetchNext ?? expoFetch,
+    enabled: !!expoFetchNext,
+  },
+  {
+    id: "nitro",
+    label: "Nitro Fetch",
+    shortLabel: "Nitro",
+    color: "#2ecc71",
+    fetchFn: nitroFetchFn ?? globalThis.fetch,
+    enabled: !!nitroFetchFn,
+  },
+];

@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["ExpoBenchmarkMetricsModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.benchmarkmetrics.ExpoBenchmarkMetricsModule"]
+  }
+}

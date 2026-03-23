@@ -12,6 +12,7 @@ import ExpoModulesCore
 internal final class ChunkCoalescer: @unchecked Sendable {
   static let defaultSizeThreshold = 64 * 1024  // 64KB
   static let defaultTimeoutMs = 16              // ~1 frame
+  static let immediateFlushThreshold = 256      // Chunks this small bypass coalescing
 
   private let sizeThreshold: Int
   private let timeoutMs: Int
@@ -50,6 +51,19 @@ internal final class ChunkCoalescer: @unchecked Sendable {
         onFlush(pending)
       }
       onFlush(ArrayBuffer.wrap(dataWithoutCopy: data))
+      return
+    }
+
+    // Tiny chunk (e.g. SSE token): append then flush immediately to preserve
+    // real-time delivery. Coalescing overhead isn't worth it for tiny payloads.
+    if data.count <= ChunkCoalescer.immediateFlushThreshold {
+      buffer.append(data)
+      cancelTimerLocked()
+      let pending = flushBufferLocked()
+      lock.unlock()
+      if let pending {
+        onFlush(pending)
+      }
       return
     }
 

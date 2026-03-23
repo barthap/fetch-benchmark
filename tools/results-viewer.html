@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fetch Benchmark Results Viewer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --card: #1e1e3a;
+    --border: #2a2a4a;
+    --text: #e0e0f0;
+    --text-dim: #8888aa;
+    --accent: #6c63ff;
+    --green: #4caf7d;
+    --red: #e05c5c;
+    --bar-bg: #2a2a4a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  header h1 { font-size: 18px; font-weight: 700; color: var(--accent); }
+  header .subtitle { color: var(--text-dim); font-size: 13px; }
+
+  .import-section {
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 0 24px;
+  }
+
+  .import-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .import-card h2 { font-size: 16px; margin-bottom: 16px; }
+
+  .import-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  textarea {
+    width: 100%;
+    height: 200px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 12px;
+    font-family: 'Fira Code', 'Courier New', monospace;
+    font-size: 12px;
+    resize: vertical;
+  }
+
+  textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+  button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.85; }
+  button.secondary {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+  }
+
+  .error-msg {
+    color: var(--red);
+    background: rgba(224,92,92,0.1);
+    border: 1px solid var(--red);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 12px;
+    font-size: 13px;
+  }
+
+  /* Results layout */
+  #results { padding: 24px; display: none; }
+
+  .meta-bar {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    padding: 12px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .meta-bar-item { display: flex; gap: 4px; }
+  .meta-bar-item .val { color: var(--text); font-weight: 600; }
+
+  .back-btn { margin-bottom: 20px; }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .legend-dot {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* Test section */
+  .test-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 28px;
+    overflow: hidden;
+  }
+
+  .test-header {
+    padding: 14px 20px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .test-header h2 { font-size: 15px; font-weight: 700; }
+  .test-header .test-id { color: var(--text-dim); font-size: 12px; font-family: monospace; }
+
+  .test-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+
+  @media (max-width: 900px) {
+    .test-body { grid-template-columns: 1fr; }
+  }
+
+  /* Charts panel */
+  .charts-panel {
+    padding: 20px;
+    border-right: 1px solid var(--border);
+  }
+  .panel-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+    font-weight: 600;
+  }
+
+  .metric-chart { margin-bottom: 20px; }
+  .metric-chart:last-child { margin-bottom: 0; }
+
+  .metric-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .bar-impl-label {
+    width: 90px;
+    font-size: 11px;
+    text-align: right;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bar-track {
+    flex: 1;
+    height: 18px;
+    background: var(--bar-bg);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    min-width: 2px;
+  }
+  .bar-value {
+    width: 90px;
+    font-size: 11px;
+    color: var(--text);
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .bar-value.best { color: var(--green); font-weight: 700; }
+
+  /* Table panel */
+  .table-panel { padding: 20px; overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 360px;
+  }
+  th {
+    text-align: left;
+    padding: 6px 10px;
+    background: var(--bg2);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.best { color: var(--green); font-weight: 700; }
+  td.err-cell { color: var(--red); font-style: italic; }
+  .impl-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .impl-color-dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+
+  .no-data { color: var(--text-dim); }
+  .no-data-text { color: var(--text-dim); font-style: italic; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Fetch Benchmark Viewer</h1>
+    <p class="subtitle">Analyze JSON exports from the benchmark app</p>
+  </div>
+</header>
+
+<!-- Import UI -->
+<div class="import-section" id="import-section">
+  <div class="import-card">
+    <h2>Load Benchmark Results</h2>
+    <div class="import-actions">
+      <button class="secondary" id="upload-btn">Upload JSON file</button>
+      <input type="file" id="file-input" accept=".json,application/json" style="display:none">
+      <button id="parse-btn">Parse JSON below</button>
+      <button class="secondary" id="example-btn">Load example</button>
+    </div>
+    <textarea id="json-input" placeholder="Paste your exported JSON here (exportVersion 3)..."></textarea>
+    <div id="error-display" class="error-msg" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Results UI -->
+<div id="results">
+  <button class="secondary back-btn" id="back-btn">Back: Load another file</button>
+  <div class="meta-bar" id="meta-bar"></div>
+  <div class="legend" id="legend"></div>
+  <div id="test-sections"></div>
+</div>
+
+<script>
+'use strict';
+
+// Metric definitions — mirrors benchmarks/metrics.ts
+const METRICS = [
+  { key: 'durationMs',         label: 'Time',      unit: 'ms',   higherIsBetter: false, fmt: v => Math.round(v) + ' ms' },
+  { key: 'sizeBytes',          label: 'Size',       unit: '',     higherIsBetter: false, fmt: v => fmtBytes(v) },
+  { key: 'throughputMbPerCc',  label: 'Speed',      unit: 'MB/s', higherIsBetter: true,  fmt: v => v.toFixed(1) + ' MB/s' },
+  { key: 'timeToFirstChunkMs', label: 'TTFC',       unit: 'ms',   higherIsBetter: false, fmt: v => v.toFixed(1) + ' ms' },
+  { key: 'chunkCount',         label: 'Chunks',     unit: '',     higherIsBetter: false, fmt: v => String(Math.round(v)) },
+  { key: 'droppedFrames',      label: 'Drops',      unit: '',     higherIsBetter: false, fmt: v => String(Math.round(v)) },
+  { key: 'medianInterTokenMs', label: 'Token \u0394', unit: 'ms', higherIsBetter: false, fmt: v => v.toFixed(1) + ' ms' },
+  { key: 'memoryDeltaBytes',   label: 'Mem \u0394', unit: '',     higherIsBetter: false, fmt: v => (v >= 0 ? '+' : '') + fmtBytes(Math.abs(v)) },
+  { key: 'jsThreadCpuMs',      label: 'JS CPU',     unit: 'ms',   higherIsBetter: false, fmt: v => v.toFixed(1) + ' ms' },
+  { key: 'gcCount',            label: 'GC',         unit: '',     higherIsBetter: false, fmt: v => String(Math.round(v)) },
+  { key: 'gcTotalPauseMs',     label: 'GC Pause',   unit: 'ms',   higherIsBetter: false, fmt: v => v.toFixed(1) + ' ms' },
+];
+
+// Default color palette
+const PALETTE = [
+  '#6c63ff', '#ff6584', '#43cfb1', '#f7c36e',
+  '#ff9d5c', '#74c7ec', '#b4b4ff', '#ff85a2',
+];
+
+function fmtBytes(bytes) {
+  if (bytes == null || isNaN(bytes)) return '\u2014';
+  const abs = Math.abs(bytes);
+  if (abs >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  if (abs >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return Math.round(bytes) + ' B';
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+// ── Wire up controls ────────────────────────────────────────────────────────
+document.getElementById('upload-btn').addEventListener('click', () => {
+  document.getElementById('file-input').click();
+});
+
+document.getElementById('file-input').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('json-input').value = ev.target.result;
+    parseAndDisplay();
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('parse-btn').addEventListener('click', parseAndDisplay);
+document.getElementById('back-btn').addEventListener('click', showImport);
+document.getElementById('example-btn').addEventListener('click', loadExample);
+
+// ── Import / display flow ───────────────────────────────────────────────────
+function showError(msg) {
+  const d = document.getElementById('error-display');
+  d.textContent = msg;
+  d.style.display = 'block';
+}
+
+function clearError() {
+  const d = document.getElementById('error-display');
+  d.textContent = '';
+  d.style.display = 'none';
+}
+
+function showImport() {
+  document.getElementById('import-section').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+}
+
+function parseAndDisplay() {
+  clearError();
+  const raw = document.getElementById('json-input').value.trim();
+  if (!raw) { showError('Please paste JSON or upload a file first.'); return; }
+
+  let data;
+  try { data = JSON.parse(raw); }
+  catch (e) { showError('Invalid JSON: ' + e.message); return; }
+
+  if (!data.results || typeof data.results !== 'object') {
+    showError('Missing or invalid "results" field. Expected exportVersion 3 format.');
+    return;
+  }
+
+  try {
+    renderResults(data);
+    document.getElementById('import-section').style.display = 'none';
+    document.getElementById('results').style.display = 'block';
+  } catch (e) {
+    showError('Rendering error: ' + e.message);
+    console.error(e);
+  }
+}
+
+// ── Render ──────────────────────────────────────────────────────────────────
+function renderResults(data) {
+  const { results, device, timestamp, runCount, exportVersion } = data;
+
+  const implIds = Object.keys(results);
+  const testIdSet = new Set();
+  for (const implId of implIds) {
+    for (const testId of Object.keys(results[implId] || {})) {
+      testIdSet.add(testId);
+    }
+  }
+  const testIds = Array.from(testIdSet);
+
+  // Assign colors per impl
+  const implColors = {};
+  implIds.forEach((id, i) => { implColors[id] = PALETTE[i % PALETTE.length]; });
+
+  // Meta bar
+  const metaBar = document.getElementById('meta-bar');
+  metaBar.textContent = '';
+  const metaItems = [
+    ['Device', device || 'unknown'],
+    ['Timestamp', timestamp ? new Date(timestamp).toLocaleString() : '\u2014'],
+    ['Run Count', String(runCount ?? '?')],
+    ['Export Version', String(exportVersion ?? '?')],
+    ['Implementations', String(implIds.length)],
+    ['Tests', String(testIds.length)],
+  ];
+  for (const [k, v] of metaItems) {
+    const span = el('span', 'meta-bar-item');
+    span.appendChild(document.createTextNode(k + ': '));
+    span.appendChild(el('span', 'val', v));
+    metaBar.appendChild(span);
+  }
+
+  // Legend
+  const legend = document.getElementById('legend');
+  legend.textContent = '';
+  for (const id of implIds) {
+    const item = el('div', 'legend-item');
+    const dot = el('span', 'legend-dot');
+    dot.style.background = implColors[id];
+    item.appendChild(dot);
+    item.appendChild(document.createTextNode(id));
+    legend.appendChild(item);
+  }
+
+  // Determine which metrics have any data at all
+  const presentMetrics = METRICS.filter(m => {
+    for (const implId of implIds) {
+      for (const testId of testIds) {
+        const median = results[implId]?.[testId]?.median;
+        if (median && typeof median[m.key] === 'number') return true;
+      }
+    }
+    return false;
+  });
+
+  // Render test sections
+  const container = document.getElementById('test-sections');
+  container.textContent = '';
+  for (const testId of testIds) {
+    container.appendChild(buildTestSection(testId, implIds, results, implColors, presentMetrics));
+  }
+}
+
+function buildTestSection(testId, implIds, results, implColors, allMetrics) {
+  const rows = implIds.map(implId => ({
+    implId,
+    color: implColors[implId],
+    median: results[implId]?.[testId]?.median ?? null,
+    error: results[implId]?.[testId]?.median?.error ?? null,
+  }));
+
+  // Metrics with data in this specific test
+  const testMetrics = allMetrics.filter(m =>
+    rows.some(r => r.median && typeof r.median[m.key] === 'number')
+  );
+  const chartMetrics = testMetrics.filter(m => m.key !== 'sizeBytes');
+
+  const section = el('div', 'test-section');
+
+  // Header
+  const header = el('div', 'test-header');
+  const h2 = el('h2', null, testId);
+  const idSpan = el('span', 'test-id', testId);
+  header.appendChild(h2);
+  header.appendChild(idSpan);
+  section.appendChild(header);
+
+  // Body
+  const body = el('div', 'test-body');
+
+  // Charts panel
+  const chartsPanel = el('div', 'charts-panel');
+  chartsPanel.appendChild(el('div', 'panel-title', 'Charts'));
+  if (chartMetrics.length === 0) {
+    chartsPanel.appendChild(el('p', 'no-data-text', 'No chart data available.'));
+  } else {
+    for (const metric of chartMetrics) {
+      chartsPanel.appendChild(buildMetricChart(metric, rows));
+    }
+  }
+
+  // Table panel
+  const tablePanel = el('div', 'table-panel');
+  tablePanel.appendChild(el('div', 'panel-title', 'All Metrics'));
+  tablePanel.appendChild(buildTable(testMetrics, rows));
+
+  body.appendChild(chartsPanel);
+  body.appendChild(tablePanel);
+  section.appendChild(body);
+  return section;
+}
+
+function buildMetricChart(metric, rows) {
+  const values = rows.map(r =>
+    (r.median && typeof r.median[metric.key] === 'number') ? r.median[metric.key] : null
+  );
+  const validValues = values.filter(v => v !== null);
+  if (validValues.length === 0) return document.createDocumentFragment();
+
+  const maxVal = Math.max(...validValues);
+  const bestVal = metric.higherIsBetter ? Math.max(...validValues) : Math.min(...validValues);
+
+  const container = el('div', 'metric-chart');
+  container.appendChild(el('div', 'metric-label', metric.label));
+
+  rows.forEach((row, i) => {
+    const val = values[i];
+    const barRow = el('div', 'bar-row');
+
+    const nameEl = el('div', 'bar-impl-label', row.implId);
+    nameEl.title = row.implId;
+
+    const track = el('div', 'bar-track');
+    const fill = el('div', 'bar-fill');
+    fill.style.background = row.color;
+    fill.style.width = (val !== null && maxVal > 0)
+      ? Math.max((val / maxVal) * 100, 1) + '%'
+      : '0%';
+    track.appendChild(fill);
+
+    const isBest = val !== null && val === bestVal && validValues.length > 1;
+    const valEl = el('div', 'bar-value' + (isBest ? ' best' : ''),
+      val !== null ? metric.fmt(val) : '\u2014');
+
+    barRow.appendChild(nameEl);
+    barRow.appendChild(track);
+    barRow.appendChild(valEl);
+    container.appendChild(barRow);
+  });
+
+  return container;
+}
+
+function buildTable(metrics, rows) {
+  // Best values per metric (only meaningful if >1 row has data)
+  const bestVals = {};
+  for (const m of metrics) {
+    const vals = rows
+      .map(r => (r.median && typeof r.median[m.key] === 'number') ? r.median[m.key] : null)
+      .filter(v => v !== null);
+    if (vals.length > 1) {
+      bestVals[m.key] = m.higherIsBetter ? Math.max(...vals) : Math.min(...vals);
+    }
+  }
+
+  const table = document.createElement('table');
+
+  // Header row
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  headerRow.appendChild(el('th', null, 'Implementation'));
+  for (const m of metrics) {
+    headerRow.appendChild(el('th', null, m.unit ? m.label + ' (' + m.unit + ')' : m.label));
+  }
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  // Body rows
+  const tbody = document.createElement('tbody');
+  for (const row of rows) {
+    const tr = document.createElement('tr');
+
+    // Impl name cell
+    const nameTd = document.createElement('td');
+    const nameWrap = el('div', 'impl-name-cell');
+    const dot = el('span', 'impl-color-dot');
+    dot.style.background = row.color;
+    nameWrap.appendChild(dot);
+    nameWrap.appendChild(document.createTextNode(row.implId));
+    nameTd.appendChild(nameWrap);
+    tr.appendChild(nameTd);
+
+    // Metric cells
+    for (const m of metrics) {
+      const td = document.createElement('td');
+      if (row.median && typeof row.median[m.key] === 'number') {
+        const val = row.median[m.key];
+        const isBest = bestVals[m.key] !== undefined && val === bestVals[m.key];
+        if (isBest) td.className = 'best';
+        td.textContent = metric_fmt(m, val);
+      } else if (row.error) {
+        td.className = 'err-cell';
+        td.textContent = 'error';
+        td.title = String(row.error);
+      } else {
+        td.className = 'no-data';
+        td.textContent = '\u2014';
+      }
+      tr.appendChild(td);
+    }
+
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  return table;
+}
+
+function metric_fmt(m, v) {
+  try { return m.fmt(v); }
+  catch (_) { return String(v); }
+}
+
+// ── Example data loader ─────────────────────────────────────────────────────
+function loadExample() {
+  const example = {
+    exportVersion: 3,
+    device: 'iPhone 17 Pro',
+    timestamp: new Date().toISOString(),
+    runCount: 3,
+    results: {
+      builtin: {
+        json: { median: { durationMs: 312, sizeBytes: 52428800, throughputMbPerCc: 158.3, memoryDeltaBytes: 12582912, jsThreadCpuMs: 245.1, gcCount: 2, gcTotalPauseMs: 18.4 }, runs: [], runCount: 3 },
+        text: { median: { durationMs: 290, sizeBytes: 52428800, throughputMbPerCc: 170.2, memoryDeltaBytes: 8388608,  jsThreadCpuMs: 180.5, gcCount: 1, gcTotalPauseMs: 9.2  }, runs: [], runCount: 3 },
+      },
+      expo: {
+        json: { median: { durationMs: 198, sizeBytes: 52428800, throughputMbPerCc: 249.7, memoryDeltaBytes: 4194304,  jsThreadCpuMs: 142.8, gcCount: 0, gcTotalPauseMs: 0   }, runs: [], runCount: 3 },
+        text: { median: { durationMs: 182, sizeBytes: 52428800, throughputMbPerCc: 271.6, memoryDeltaBytes: 2097152,  jsThreadCpuMs: 110.3, gcCount: 0, gcTotalPauseMs: 0   }, runs: [], runCount: 3 },
+      },
+      nitro: {
+        json: { median: { durationMs: 175, sizeBytes: 52428800, throughputMbPerCc: 282.1, memoryDeltaBytes: 1048576,  jsThreadCpuMs: 95.4,  gcCount: 0, gcTotalPauseMs: 0   }, runs: [], runCount: 3 },
+        text: { median: { durationMs: 163, sizeBytes: 52428800, throughputMbPerCc: 302.8, memoryDeltaBytes: 524288,   jsThreadCpuMs: 88.7,  gcCount: 0, gcTotalPauseMs: 0   }, runs: [], runCount: 3 },
+      },
+    },
+  };
+  document.getElementById('json-input').value = JSON.stringify(example, null, 2);
+  parseAndDisplay();
+}
+</script>
+</body>
+</html>

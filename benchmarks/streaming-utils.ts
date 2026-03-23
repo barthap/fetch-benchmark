@@ -1,38 +1,13 @@
-import type { StreamingBenchmarkResult, StreamingBenchmarkDef, StreamingBenchmark, FetchFn } from "./streaming-types";
+import type { StreamingBenchmarkResult, FetchFn } from "./streaming-types";
 import { calculateThroughput } from "./utils";
-
-export function makeStreamingBenchmark(
-  def: StreamingBenchmarkDef,
-  fetchFn: FetchFn,
-): StreamingBenchmark {
-  return {
-    id: def.id,
-    name: def.name,
-    description: def.description,
-    category: def.category,
-    endpoint: def.endpoint,
-    run: async (baseUrl: string): Promise<StreamingBenchmarkResult> => {
-      const url = `${baseUrl}${def.endpoint}`;
-      const result = await def.run(fetchFn, url);
-
-      // GC after each benchmark
-      if (global.gc) {
-        global.gc();
-      } else if (globalThis.gc) {
-        globalThis.gc();
-      }
-
-      return result;
-    },
-  };
-}
 
 export async function drainStream(
   fetchFn: FetchFn,
   url: string,
 ): Promise<StreamingBenchmarkResult> {
   const fetchStart = performance.now();
-  const response = await fetchFn(url);
+  // @ts-expect-error nitro does require this argument for some reason
+  const response = await fetchFn(url, { stream: true });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
